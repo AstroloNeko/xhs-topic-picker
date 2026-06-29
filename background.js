@@ -64,6 +64,9 @@ async function analyzeAndSave(tab) {
     ]);
     const extraction = await extractFromTab(tab.id);
     extraction.coverDataUrl = await globalThis.topicCover.cacheCoverImage(extraction.coverUrl);
+    if (!extraction.coverDataUrl) {
+      extraction.coverDataUrl = await captureVisibleCover(tab.windowId);
+    }
     const analysis = await globalThis.topicAi.analyzeNoteWithAi({
       extraction,
       categories,
@@ -87,6 +90,18 @@ async function analyzeAndSave(tab) {
     await setBadge(tab.id, "OK", "#187d59");
   } catch (_error) {
     await setBadge(tab.id, "ERR", "#a21d2b");
+  }
+}
+
+async function captureVisibleCover(windowId) {
+  if (!windowId || !chrome.tabs?.captureVisibleTab) return "";
+  try {
+    return await chrome.tabs.captureVisibleTab(windowId, {
+      format: "jpeg",
+      quality: 70
+    });
+  } catch (_error) {
+    return "";
   }
 }
 

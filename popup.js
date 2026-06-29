@@ -18,6 +18,7 @@ const pinPanelButton = document.querySelector("#pinPanel");
 let currentExtraction = null;
 let currentCategories = [];
 let currentTabId = null;
+let currentWindowId = null;
 const isSidePanel = document.body.classList.contains("sidepanel-body");
 
 function escapeHtml(value) {
@@ -85,6 +86,7 @@ async function extractFromPage() {
     throw new Error("请先打开一篇小红书笔记页面，再点击插件。");
   }
   currentTabId = tab.id;
+  currentWindowId = tab.windowId;
 
   const cached = await getCachedDraft(tab.id);
   if (cached?.extraction?.url === tab.url) {
@@ -140,16 +142,33 @@ function renderExtraction(data) {
 }
 
 async function ensureCoverCache() {
-  if (!currentExtraction?.coverUrl || currentExtraction.coverDataUrl) return;
-  currentExtraction.coverDataUrl = await window.topicCover.cacheCoverImage(
-    currentExtraction.coverUrl
-  );
+  if (!currentExtraction || currentExtraction.coverDataUrl) return;
+  if (currentExtraction.coverUrl) {
+    currentExtraction.coverDataUrl = await window.topicCover.cacheCoverImage(currentExtraction.coverUrl);
+  }
+  if (!currentExtraction.coverDataUrl) {
+    currentExtraction.coverDataUrl = await captureVisibleCover();
+  }
+  renderCover(currentExtraction.coverUrl, currentExtraction.title);
   await setCachedDraft();
 }
 
+async function captureVisibleCover() {
+  if (!currentWindowId || !chrome.tabs?.captureVisibleTab) return "";
+  try {
+    return await chrome.tabs.captureVisibleTab(currentWindowId, {
+      format: "jpeg",
+      quality: 70
+    });
+  } catch (_error) {
+    return "";
+  }
+}
+
 function renderCover(coverUrl, title) {
-  if (coverUrl) {
-    cover.src = coverUrl;
+  const source = currentExtraction?.coverDataUrl || coverUrl;
+  if (source) {
+    cover.src = source;
     cover.alt = title || "封面预览";
     cover.classList.remove("hidden");
     coverFallback.classList.add("hidden");
