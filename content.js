@@ -13,6 +13,7 @@ function getMeta(nameOrProperty) {
 
 function normalizeUrl(url) {
   if (!url) return "";
+  if (/^(blob:|data:)/i.test(url)) return "";
   try {
     return new URL(url, location.href).href;
   } catch (_error) {
@@ -36,10 +37,38 @@ function backgroundImageUrl(el) {
 }
 
 function isGenericImage(url) {
-  return /sns-avatar|avatar|favicon|logo|xhslink|小红书|redbook|icon/i.test(url || "");
+  return /sns-avatar|avatar|favicon|logo|xhslink|小红书|redbook|icon|data:image\/svg/i.test(url || "");
+}
+
+function imageScore(item) {
+  const area = (item.width || 0) * (item.height || 0);
+  const urlBonus = /xhscdn|sns-webpic|sns-img|spectrum/.test(item.src) ? 100000 : 0;
+  const ratio = item.width && item.height ? item.width / item.height : 1;
+  const ratioBonus = ratio > 0.45 && ratio < 2.4 ? 50000 : 0;
+  return area + urlBonus + ratioBonus;
+}
+
+function videoPosterCandidates() {
+  return Array.from(document.querySelectorAll("video"))
+    .map((video) => ({
+      src: normalizeUrl(
+        video.getAttribute("poster") ||
+          video.poster ||
+          video.getAttribute("data-poster") ||
+          video.getAttribute("x5-video-poster")
+      ),
+      width: video.videoWidth || video.clientWidth || 0,
+      height: video.videoHeight || video.clientHeight || 0
+    }))
+    .filter((item) => item.src && !isGenericImage(item.src));
 }
 
 function firstImage() {
+  const videoPosters = videoPosterCandidates();
+  if (videoPosters.length) {
+    return videoPosters.sort((a, b) => imageScore(b) - imageScore(a))[0].src;
+  }
+
   const images = Array.from(document.images)
     .map((img) => ({
       src: normalizeUrl(
@@ -53,18 +82,23 @@ function firstImage() {
       height: img.naturalHeight || img.height
     }))
     .filter((img) => img.src && !isGenericImage(img.src) && img.width >= 180 && img.height >= 180)
-    .sort((a, b) => b.width * b.height - a.width * a.height);
+    .sort((a, b) => imageScore(b) - imageScore(a));
 
   if (images[0]?.src) return images[0].src;
 
   const ogImage = normalizeUrl(getMeta("og:image"));
   if (ogImage && !isGenericImage(ogImage)) return ogImage;
 
-  const backgroundCandidates = Array.from(document.querySelectorAll("[style], .swiper-slide, .note-slider, .media-container"))
-    .map((el) => normalizeUrl(backgroundImageUrl(el)))
-    .filter(Boolean);
+  const backgroundCandidates = Array.from(document.querySelectorAll("body *"))
+    .map((el) => ({
+      src: normalizeUrl(backgroundImageUrl(el)),
+      width: el.clientWidth || 0,
+      height: el.clientHeight || 0
+    }))
+    .filter((item) => item.src && !isGenericImage(item.src) && item.width >= 160 && item.height >= 120)
+    .sort((a, b) => imageScore(b) - imageScore(a));
 
-  return backgroundCandidates[0] || "";
+  return backgroundCandidates[0]?.src || "";
 }
 
 function extractTitle() {
@@ -100,19 +134,39 @@ function extractTags(text) {
   return Array.from(new Set(fromHashtags)).slice(0, 12);
 }
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message?.type !== "XHS_EXTRACT_NOTE") return;
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
+async function extractNoteWithRetry() {
   const title = extractTitle();
   const description = extractDescription();
   const fullText = `${title} ${description}`;
+  let coverUrl = firstImage();
 
-  sendResponse({
+  if (!coverUrl) {
+    await sleep(1200);
+    coverUrl = firstImage();
+  }
+
+  if (!coverUrl) {
+    await sleep(1800);
+    coverUrl = firstImage();
+  }
+
+  return {
     title,
     description,
-    coverUrl: firstImage(),
+    coverUrl,
     url: location.href,
     tags: extractTags(fullText),
     capturedAt: new Date().toISOString()
-  });
+  };
+}
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type !== "XHS_EXTRACT_NOTE") return;
+
+  extractNoteWithRetry().then(sendResponse);
+  return true;
 });
