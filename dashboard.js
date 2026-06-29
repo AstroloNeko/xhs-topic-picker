@@ -22,6 +22,11 @@ const updateState = document.querySelector("#updateState");
 const summary = document.querySelector("#summary");
 const noteRows = document.querySelector("#noteRows");
 const emptyState = document.querySelector("#emptyState");
+const detailDialog = document.querySelector("#detailDialog");
+const detailCategory = document.querySelector("#detailCategory");
+const detailTitle = document.querySelector("#detailTitle");
+const detailBody = document.querySelector("#detailBody");
+const closeDetailButton = document.querySelector("#closeDetail");
 const exportButton = document.querySelector("#exportCsv");
 const clearButton = document.querySelector("#clearAll");
 
@@ -96,13 +101,38 @@ function renderSummary() {
     .join("");
 }
 
+function firstItems(items, limit) {
+  const list = Array.isArray(items) ? items.filter(Boolean) : [];
+  return {
+    shown: list.slice(0, limit),
+    hiddenCount: Math.max(0, list.length - limit)
+  };
+}
+
+function renderTags(items, limit = 5) {
+  const { shown, hiddenCount } = firstItems(items, limit);
+  const tags = shown.map((word) => `<span class="tag">${escapeHtml(word)}</span>`).join("");
+  return hiddenCount ? `${tags}<span class="more-chip">+${hiddenCount}</span>` : tags;
+}
+
+function renderPreviewList(items, limit = 3) {
+  const { shown, hiddenCount } = firstItems(items, limit);
+  if (!shown.length) return "<span class=\"muted-text\">无</span>";
+  const lines = shown.map((item) => `<p>${escapeHtml(item)}</p>`).join("");
+  return `<div class="clamp-list">${lines}${hiddenCount ? `<p class="muted-text">还有 ${hiddenCount} 条...</p>` : ""}</div>`;
+}
+
+function renderNoteText(value) {
+  return value ? `<div class="clamp-text">${escapeHtml(value)}</div>` : "<span class=\"muted-text\">无</span>";
+}
+
 function renderRows() {
   const rows = filteredNotes();
   emptyState.classList.toggle("hidden", rows.length > 0);
   noteRows.innerHTML = rows
     .map(
       (note) => `
-        <tr>
+        <tr class="note-row">
           <td class="cover-cell">${
             note.coverDataUrl || note.coverUrl
               ? `<img src="${escapeHtml(note.coverDataUrl || note.coverUrl)}" alt="${escapeHtml(note.title)}" referrerpolicy="no-referrer" loading="lazy" />`
@@ -112,13 +142,16 @@ function renderRows() {
           <td class="title-cell">
             <a href="${escapeHtml(note.url)}" target="_blank" rel="noreferrer">${escapeHtml(note.title || "未命名笔记")}</a>
           </td>
-          <td>${(note.keywords || []).map((word) => `<span class="tag">${escapeHtml(word)}</span>`).join("")}</td>
-          <td>${(note.coverTakeaways || []).map((item) => `<p>${escapeHtml(item)}</p>`).join("")}</td>
-          <td>${(note.contentTakeaways || []).map((item) => `<p>${escapeHtml(item)}</p>`).join("")}</td>
-          <td>${(note.topicIdeas || []).map((idea) => `<p>${escapeHtml(idea)}</p>`).join("")}</td>
-          <td>${escapeHtml(note.notes || "")}</td>
+          <td class="tags-cell">${renderTags(note.keywords)}</td>
+          <td class="preview-cell">${renderPreviewList(note.coverTakeaways)}</td>
+          <td class="preview-cell">${renderPreviewList(note.contentTakeaways)}</td>
+          <td class="preview-cell wide-preview">${renderPreviewList(note.topicIdeas, 2)}</td>
+          <td class="note-cell">${renderNoteText(note.notes)}</td>
           <td>${dateLabel(note.capturedAt)}</td>
-          <td><button class="text-button" data-delete="${escapeHtml(note.id)}">删除</button></td>
+          <td class="action-cell">
+            <button class="text-button detail-button" data-detail="${escapeHtml(note.id)}">详情</button>
+            <button class="text-button" data-delete="${escapeHtml(note.id)}">删除</button>
+          </td>
         </tr>
       `
     )
@@ -131,6 +164,53 @@ function renderRows() {
       }));
     });
   });
+}
+
+function renderDetailSection(title, content) {
+  return `
+    <section class="detail-section">
+      <h3>${escapeHtml(title)}</h3>
+      ${content}
+    </section>
+  `;
+}
+
+function renderFullList(items) {
+  const list = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (!list.length) return "<p class=\"muted-text\">无</p>";
+  return `<ul>${list.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+}
+
+function openDetail(note) {
+  detailCategory.textContent = note.category || "未分类";
+  detailTitle.textContent = note.title || "未命名笔记";
+  detailBody.innerHTML = `
+    <div class="detail-cover-block">
+      ${
+        note.coverDataUrl || note.coverUrl
+          ? `<img src="${escapeHtml(note.coverDataUrl || note.coverUrl)}" alt="${escapeHtml(note.title)}" referrerpolicy="no-referrer" />`
+          : "<span class=\"no-cover\">无封面</span>"
+      }
+      <div>
+        <a class="detail-link" href="${escapeHtml(note.url)}" target="_blank" rel="noreferrer">打开原笔记</a>
+        <p class="muted-text">采集时间：${dateLabel(note.capturedAt)}</p>
+      </div>
+    </div>
+    ${renderDetailSection("关键词", `<div class="detail-tags">${renderTags(note.keywords, 30)}</div>`)}
+    ${renderDetailSection("封面共性", renderFullList(note.coverTakeaways))}
+    ${renderDetailSection("内容共性", renderFullList(note.contentTakeaways))}
+    ${renderDetailSection("选题内容", renderFullList(note.topicIdeas))}
+    ${renderDetailSection("备注", note.notes ? `<p>${escapeHtml(note.notes).replace(/\n/g, "<br>")}</p>` : "<p class=\"muted-text\">无</p>")}
+  `;
+  detailBody.querySelectorAll("img").forEach((img) => {
+    img.addEventListener("error", () => {
+      img.replaceWith(Object.assign(document.createElement("span"), {
+        className: "no-cover",
+        textContent: "封面失效"
+      }));
+    });
+  });
+  detailDialog.showModal();
 }
 
 async function load() {
@@ -257,7 +337,7 @@ function toCsvValue(value) {
 }
 
 function exportCsv() {
-  const header = ["栏目", "标题", "关键词", "封面共性", "内容共性", "选题内容", "备注", "链接", "封面", "采集时间"];
+  const header = ["栏目", "标题", "关键词", "封面共性", "内容共性", "选题内容", "备注", "链接", "封面", "封面已缓存", "采集时间"];
   const rows = filteredNotes().map((note) => [
     note.category,
     note.title,
@@ -268,6 +348,7 @@ function exportCsv() {
     note.notes,
     note.url,
     note.coverUrl,
+    note.coverDataUrl ? "是" : "否",
     note.capturedAt
   ]);
   const csv = [header, ...rows].map((row) => row.map(toCsvValue).join(",")).join("\n");
@@ -292,10 +373,22 @@ summary.addEventListener("click", (event) => {
 });
 
 noteRows.addEventListener("click", async (event) => {
+  const detailButton = event.target.closest("[data-detail]");
+  if (detailButton) {
+    const note = notes.find((item) => item.id === detailButton.dataset.detail);
+    if (note) openDetail(note);
+    return;
+  }
+
   const button = event.target.closest("[data-delete]");
   if (!button) return;
   await window.topicStore.deleteNote(button.dataset.delete);
   await load();
+});
+
+closeDetailButton.addEventListener("click", () => detailDialog.close());
+detailDialog.addEventListener("click", (event) => {
+  if (event.target === detailDialog) detailDialog.close();
 });
 
 addCategoryButton.addEventListener("click", async () => {

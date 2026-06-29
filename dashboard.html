@@ -124,6 +124,19 @@
         </table>
         <div id="emptyState" class="empty hidden">还没有采集内容。打开小红书笔记后点击插件保存。</div>
       </section>
+
+      <dialog id="detailDialog" class="detail-dialog">
+        <div class="detail-shell">
+          <header class="detail-header">
+            <div>
+              <p id="detailCategory" class="eyebrow"></p>
+              <h2 id="detailTitle"></h2>
+            </div>
+            <button id="closeDetail" class="secondary" type="button">关闭</button>
+          </header>
+          <div class="detail-body" id="detailBody"></div>
+        </div>
+      </dialog>
     </main>
 
     <script src="storage.js"></script>
