@@ -245,13 +245,10 @@ async function extractNoteWithRetry() {
 }
 
 let pickerOverlay = null;
-let pickerBox = null;
 
 function removePicker() {
   if (pickerOverlay) pickerOverlay.remove();
-  if (pickerBox) pickerBox.remove();
   pickerOverlay = null;
-  pickerBox = null;
   document.querySelectorAll("[data-xhs-picker-bound]").forEach((el) => {
     el.removeAttribute("data-xhs-picker-bound");
   });
@@ -280,71 +277,39 @@ function elementCoverUrl(el) {
 function startCoverPicker(sendResponse) {
   removePicker();
   pickerOverlay = document.createElement("div");
-  pickerOverlay.style.cssText = "position:fixed;inset:0;cursor:crosshair;background:rgba(0,0,0,.08);z-index:2147483646";
-  pickerBox = document.createElement("div");
-  pickerBox.style.cssText = "position:fixed;pointer-events:none;border:3px solid #d7374a;background:rgba(215,55,74,.16);z-index:2147483647;border-radius:8px;display:none";
+  pickerOverlay.style.cssText = "position:fixed;pointer-events:none;border:3px solid #d7374a;background:rgba(215,55,74,.12);z-index:2147483647;border-radius:8px;display:none";
   document.documentElement.appendChild(pickerOverlay);
-  document.documentElement.appendChild(pickerBox);
 
+  const elements = selectableCoverElements();
   const cleanup = () => {
-    document.removeEventListener("mousedown", onDown, true);
     document.removeEventListener("mousemove", onMove, true);
-    document.removeEventListener("mouseup", onUp, true);
+    document.removeEventListener("click", onClick, true);
     document.removeEventListener("keydown", onKey, true);
     removePicker();
   };
-  const hint = document.createElement("div");
-  hint.textContent = "按住拖出封面范围，松开保存；Esc 取消";
-  hint.style.cssText = "position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:2147483647;background:#202124;color:#fff;border-radius:999px;padding:9px 14px;font:14px -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.24)";
-  pickerOverlay.appendChild(hint);
-
-  let start = null;
+  const show = (el) => {
+    const rect = el.getBoundingClientRect();
+    pickerOverlay.style.display = "block";
+    pickerOverlay.style.left = `${rect.left}px`;
+    pickerOverlay.style.top = `${rect.top}px`;
+    pickerOverlay.style.width = `${rect.width}px`;
+    pickerOverlay.style.height = `${rect.height}px`;
+  };
   let current = null;
-  const draw = () => {
-    if (!start || !current) return;
-    const x = Math.min(start.x, current.x);
-    const y = Math.min(start.y, current.y);
-    const width = Math.abs(start.x - current.x);
-    const height = Math.abs(start.y - current.y);
-    pickerBox.style.display = "block";
-    pickerBox.style.left = `${x}px`;
-    pickerBox.style.top = `${y}px`;
-    pickerBox.style.width = `${width}px`;
-    pickerBox.style.height = `${height}px`;
-  };
-  const onDown = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    start = { x: event.clientX, y: event.clientY };
-    current = { ...start };
-    draw();
-  };
   const onMove = (event) => {
-    if (!start) return;
-    event.preventDefault();
-    event.stopPropagation();
-    current = { x: event.clientX, y: event.clientY };
-    draw();
+    const hovered = document.elementsFromPoint(event.clientX, event.clientY);
+    current =
+      hovered.find((target) => elements.includes(target)) ||
+      elements.find((el) => hovered.some((target) => el.contains(target) || target.contains(el))) ||
+      null;
+    if (current) show(current);
   };
-  const onUp = (event) => {
-    if (!start || !current) return;
+  const onClick = (event) => {
+    if (!current) return;
     event.preventDefault();
     event.stopPropagation();
-    current = { x: event.clientX, y: event.clientY };
-    const rect = {
-      x: Math.min(start.x, current.x),
-      y: Math.min(start.y, current.y),
-      width: Math.abs(start.x - current.x),
-      height: Math.abs(start.y - current.y),
-      viewportWidth: window.innerWidth || document.documentElement.clientWidth,
-      viewportHeight: window.innerHeight || document.documentElement.clientHeight
-    };
-    if (rect.width < 40 || rect.height < 40) {
-      sendResponse({ canceled: true });
-      cleanup();
-      return;
-    }
-    sendResponse({ coverUrl: "", coverRect: rect, screenshotOnly: true });
+    const rect = rectFromElement(current);
+    sendResponse({ coverUrl: elementCoverUrl(current), coverRect: rect });
     cleanup();
   };
   const onKey = (event) => {
@@ -353,9 +318,8 @@ function startCoverPicker(sendResponse) {
       cleanup();
     }
   };
-  document.addEventListener("mousedown", onDown, true);
   document.addEventListener("mousemove", onMove, true);
-  document.addEventListener("mouseup", onUp, true);
+  document.addEventListener("click", onClick, true);
   document.addEventListener("keydown", onKey, true);
 }
 

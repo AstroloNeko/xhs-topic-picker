@@ -309,19 +309,7 @@ refreshButton.addEventListener("click", capture);
 saveNoteButton.addEventListener("click", saveCurrentNote);
 pickCoverButton.addEventListener("click", async () => {
   if (!currentExtraction) return;
-  if (!isSidePanel) {
-    captureState.textContent = "框选封面需要侧边栏保持打开，正在切换...";
-    captureState.classList.remove("hidden", "error");
-    await setPinnedMode(true);
-    const currentWindow = await chrome.windows.getCurrent();
-    if (chrome.sidePanel?.open && currentWindow?.id) {
-      await chrome.sidePanel.open({ windowId: currentWindow.id });
-    }
-    window.close();
-    return;
-  }
-
-  captureState.textContent = "请在页面上拖出封面范围，松开保存，按 Esc 取消。";
+  captureState.textContent = "请在页面主图/视频区域上移动鼠标并点击，按 Esc 取消。";
   captureState.classList.remove("hidden", "error");
   pickCoverButton.disabled = true;
   try {
@@ -330,14 +318,19 @@ pickCoverButton.addEventListener("click", async () => {
       captureState.textContent = "已取消选择封面。";
       return;
     }
-    currentExtraction.coverUrl = picked.screenshotOnly ? "" : picked.coverUrl || currentExtraction.coverUrl || "";
+    currentExtraction.coverUrl = picked.coverUrl || currentExtraction.coverUrl || "";
     currentExtraction.coverRect = picked.coverRect || currentExtraction.coverRect;
-    currentExtraction.coverDataUrl = await captureVisibleCover();
+    currentExtraction.coverDataUrl = currentExtraction.coverUrl
+      ? await window.topicCover.cacheCoverImage(currentExtraction.coverUrl)
+      : "";
+    if (!currentExtraction.coverDataUrl) {
+      currentExtraction.coverDataUrl = await captureVisibleCover();
+    }
     renderCover(currentExtraction.coverUrl, currentExtraction.title);
     await setCachedDraft();
-    captureState.textContent = "已框选封面截图。";
+    captureState.textContent = "已选择封面。";
   } catch (error) {
-    captureState.textContent = error.message || "框选封面失败。";
+    captureState.textContent = error.message || "选择封面失败。";
     captureState.classList.add("error");
   } finally {
     pickCoverButton.disabled = false;
