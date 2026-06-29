@@ -133,7 +133,16 @@ function renderExtraction(data) {
 
   captureState.classList.add("hidden");
   form.classList.remove("hidden");
+  ensureCoverCache();
   setCachedDraft();
+}
+
+async function ensureCoverCache() {
+  if (!currentExtraction?.coverUrl || currentExtraction.coverDataUrl) return;
+  currentExtraction.coverDataUrl = await window.topicCover.cacheCoverImage(
+    currentExtraction.coverUrl
+  );
+  await setCachedDraft();
 }
 
 function renderCover(coverUrl, title) {
@@ -199,6 +208,7 @@ function applyFormNote(note) {
 
 async function saveCurrentNote() {
   if (!currentExtraction) return;
+  await ensureCoverCache();
   await window.topicStore.saveNote({
     ...currentExtraction,
     ...getFormNote()

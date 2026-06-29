@@ -377,6 +377,9 @@ td p {
 
 .no-cover {
   color: var(--muted);
+  display: inline-block;
+  font-size: 12px;
+  width: 72px;
 }
 
 .title-cell {

@@ -11,20 +11,56 @@ function getMeta(nameOrProperty) {
   return el ? el.getAttribute("content") || "" : "";
 }
 
+function normalizeUrl(url) {
+  if (!url) return "";
+  try {
+    return new URL(url, location.href).href;
+  } catch (_error) {
+    return "";
+  }
+}
+
+function bestFromSrcset(srcset) {
+  if (!srcset) return "";
+  return srcset
+    .split(",")
+    .map((item) => item.trim().split(/\s+/)[0])
+    .filter(Boolean)
+    .pop() || "";
+}
+
+function backgroundImageUrl(el) {
+  const value = getComputedStyle(el).backgroundImage;
+  const match = value && value.match(/url\(["']?(.+?)["']?\)/);
+  return match ? match[1] : "";
+}
+
 function firstImage() {
-  const ogImage = getMeta("og:image");
+  const ogImage = normalizeUrl(getMeta("og:image"));
   if (ogImage) return ogImage;
 
   const images = Array.from(document.images)
     .map((img) => ({
-      src: img.currentSrc || img.src,
+      src: normalizeUrl(
+        img.currentSrc ||
+          bestFromSrcset(img.srcset) ||
+          img.getAttribute("data-src") ||
+          img.getAttribute("data-original") ||
+          img.src
+      ),
       width: img.naturalWidth || img.width,
       height: img.naturalHeight || img.height
     }))
     .filter((img) => img.src && img.width >= 180 && img.height >= 180)
     .sort((a, b) => b.width * b.height - a.width * a.height);
 
-  return images[0]?.src || "";
+  if (images[0]?.src) return images[0].src;
+
+  const backgroundCandidates = Array.from(document.querySelectorAll("[style], .swiper-slide, .note-slider, .media-container"))
+    .map((el) => normalizeUrl(backgroundImageUrl(el)))
+    .filter(Boolean);
+
+  return backgroundCandidates[0] || "";
 }
 
 function extractTitle() {

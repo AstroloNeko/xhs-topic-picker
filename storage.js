@@ -69,6 +69,7 @@ async function saveNote(note) {
     title: note.title || "",
     category: note.category || DEFAULT_CATEGORIES[0],
     coverUrl: note.coverUrl || "",
+    coverDataUrl: note.coverDataUrl || "",
     url: note.url || "",
     keywords: Array.isArray(note.keywords) ? note.keywords : [],
     coverTakeaways: Array.isArray(note.coverTakeaways) ? note.coverTakeaways : [],

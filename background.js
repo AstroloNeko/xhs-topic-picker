@@ -1,4 +1,4 @@
-importScripts("storage.js", "keyword.js", "ai.js");
+importScripts("storage.js", "keyword.js", "ai.js", "cover.js");
 
 const MENU_ID = "xhs-ai-save";
 const UPDATE_ALARM = "xhs-update-check";
@@ -63,6 +63,7 @@ async function analyzeAndSave(tab) {
       globalThis.topicStore.getCategories()
     ]);
     const extraction = await extractFromTab(tab.id);
+    extraction.coverDataUrl = await globalThis.topicCover.cacheCoverImage(extraction.coverUrl);
     const analysis = await globalThis.topicAi.analyzeNoteWithAi({
       extraction,
       categories,

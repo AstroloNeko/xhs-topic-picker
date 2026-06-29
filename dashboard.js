@@ -104,8 +104,8 @@ function renderRows() {
       (note) => `
         <tr>
           <td class="cover-cell">${
-            note.coverUrl
-              ? `<img src="${escapeHtml(note.coverUrl)}" alt="${escapeHtml(note.title)}" />`
+            note.coverDataUrl || note.coverUrl
+              ? `<img src="${escapeHtml(note.coverDataUrl || note.coverUrl)}" alt="${escapeHtml(note.title)}" referrerpolicy="no-referrer" loading="lazy" />`
               : "<span class=\"no-cover\">无</span>"
           }</td>
           <td><span class="pill">${escapeHtml(note.category)}</span></td>
@@ -123,6 +123,14 @@ function renderRows() {
       `
     )
     .join("");
+  noteRows.querySelectorAll(".cover-cell img").forEach((img) => {
+    img.addEventListener("error", () => {
+      img.replaceWith(Object.assign(document.createElement("span"), {
+        className: "no-cover",
+        textContent: "封面失效"
+      }));
+    });
+  });
 }
 
 async function load() {
