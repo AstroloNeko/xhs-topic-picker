@@ -13,6 +13,11 @@ const customPromptInput = document.querySelector("#customPrompt");
 const saveAiSettingsButton = document.querySelector("#saveAiSettings");
 const resetPromptButton = document.querySelector("#resetPrompt");
 const aiSettingsState = document.querySelector("#aiSettingsState");
+const experimentVideoCoverInput = document.querySelector("#experimentVideoCover");
+const experimentScreenshotFallbackInput = document.querySelector("#experimentScreenshotFallback");
+const experimentOverlayMediaInput = document.querySelector("#experimentOverlayMedia");
+const saveExperimentalSettingsButton = document.querySelector("#saveExperimentalSettings");
+const experimentalSettingsState = document.querySelector("#experimentalSettingsState");
 const updateEnabledInput = document.querySelector("#updateEnabled");
 const githubOwnerInput = document.querySelector("#githubOwner");
 const githubRepoInput = document.querySelector("#githubRepo");
@@ -29,6 +34,10 @@ const detailDialog = document.querySelector("#detailDialog");
 const detailCategory = document.querySelector("#detailCategory");
 const detailTitle = document.querySelector("#detailTitle");
 const detailBody = document.querySelector("#detailBody");
+const detailState = document.querySelector("#detailState");
+const reanalyzeDetailButton = document.querySelector("#reanalyzeDetail");
+const copyTopicsButton = document.querySelector("#copyTopics");
+const copyTitlePatternsButton = document.querySelector("#copyTitlePatterns");
 const closeDetailButton = document.querySelector("#closeDetail");
 const editDialog = document.querySelector("#editDialog");
 const editForm = document.querySelector("#editForm");
@@ -60,6 +69,7 @@ let categories = [];
 let promptTemplates = [];
 let selectedIds = new Set();
 let editingNoteId = null;
+let detailNoteId = null;
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => {
@@ -93,8 +103,12 @@ function filteredNotes() {
   return notes.filter((note) => {
     const categoryMatch = category === "全部" || note.category === category;
     const hasCover = Boolean(note.coverDataUrl || note.coverUrl);
+    const abnormalCover = isAbnormalNote(note);
     const coverMatch =
-      cover === "全部" || (cover === "有封面" && hasCover) || (cover === "无封面" && !hasCover);
+      cover === "全部" ||
+      (cover === "有封面" && hasCover) ||
+      (cover === "无封面" && !hasCover) ||
+      (cover === "封面异常" && abnormalCover);
     const hasAi = Boolean(
       (note.coverTakeaways || []).length ||
         (note.contentTakeaways || []).length ||
@@ -115,6 +129,29 @@ function filteredNotes() {
       .toLowerCase();
     return categoryMatch && coverMatch && aiMatch && (!query || text.includes(query));
   });
+}
+
+function isGenericCoverUrl(value) {
+  return /favicon|logo|xhslink|redbook|icon|小红书/i.test(value || "");
+}
+
+function isAbnormalNote(note) {
+  const source = note.coverDataUrl || note.coverUrl || "";
+  if (!note.title?.trim()) return true;
+  if (!source) return true;
+  if (!note.coverUrl) return true;
+  if (isGenericCoverUrl(note.coverUrl)) return true;
+  if (note.coverDataUrl && note.coverDataUrl.length < 1200) return true;
+  return false;
+}
+
+function abnormalReason(note) {
+  if (!note.title?.trim()) return "标题为空";
+  if (!(note.coverDataUrl || note.coverUrl)) return "无封面";
+  if (!note.coverUrl) return "截图兜底";
+  if (isGenericCoverUrl(note.coverUrl)) return "疑似默认图";
+  if (note.coverDataUrl && note.coverDataUrl.length < 1200) return "封面过小";
+  return "";
 }
 
 function renderFilters() {
@@ -191,7 +228,7 @@ function renderRows() {
             note.coverDataUrl || note.coverUrl
               ? `<img src="${escapeHtml(note.coverDataUrl || note.coverUrl)}" alt="${escapeHtml(note.title)}" referrerpolicy="no-referrer" loading="lazy" />`
               : "<span class=\"no-cover\">无</span>"
-          }</td>
+          }${isAbnormalNote(note) ? `<span class="warning-chip">${escapeHtml(abnormalReason(note))}</span>` : ""}</td>
           <td><span class="pill">${escapeHtml(note.category)}</span></td>
           <td class="title-cell">
             <a href="${escapeHtml(note.url)}" target="_blank" rel="noreferrer">${escapeHtml(note.title || "未命名笔记")}</a>
@@ -245,6 +282,8 @@ function renderFullList(items) {
 }
 
 function openDetail(note) {
+  detailNoteId = note.id;
+  detailState.textContent = "";
   detailCategory.textContent = note.category || "未分类";
   detailTitle.textContent = note.title || "未命名笔记";
   detailBody.innerHTML = `
@@ -257,6 +296,7 @@ function openDetail(note) {
       <div>
         <a class="detail-link" href="${escapeHtml(note.url)}" target="_blank" rel="noreferrer">打开原笔记</a>
         <p class="muted-text">采集时间：${dateLabel(note.capturedAt)}</p>
+        ${isAbnormalNote(note) ? `<p class="warning-text">封面异常：${escapeHtml(abnormalReason(note))}</p>` : ""}
       </div>
     </div>
     ${renderDetailSection("关键词", `<div class="detail-tags">${renderTags(note.keywords, 30)}</div>`)}
@@ -301,18 +341,29 @@ async function load() {
   promptTemplates = await window.topicStore.getPromptTemplates();
   const settings = await window.topicStore.getAiSettings();
   const updateSettings = await window.topicStore.getUpdateSettings();
+  const experimentalSettings = await window.topicStore.getExperimentalSettings();
   apiKeyInput.value = settings.apiKey;
   modelNameInput.value = settings.model;
   maxTokensInput.value = settings.maxTokens;
   focusPointsInput.value = settings.focusPoints;
   customPromptInput.value = settings.customPrompt;
   aiSettingsState.textContent = settings.apiKey ? "已保存" : "未设置";
+  renderExperimentalSettings(experimentalSettings);
   renderUpdateSettings(updateSettings);
   const selected = categoryFilter.value || "全部";
   renderFilters();
   if (["全部", ...categories].includes(selected)) categoryFilter.value = selected;
   renderSummary();
   renderRows();
+}
+
+function renderExperimentalSettings(settings) {
+  experimentVideoCoverInput.checked = settings.videoCover;
+  experimentScreenshotFallbackInput.checked = settings.screenshotFallback;
+  experimentOverlayMediaInput.checked = settings.overlayMedia;
+  experimentalSettingsState.textContent = settings.videoCover || settings.screenshotFallback || settings.overlayMedia
+    ? "实验功能已开启"
+    : "默认关闭";
 }
 
 function renderUpdateSettings(settings) {
@@ -509,6 +560,84 @@ editForm.addEventListener("submit", async (event) => {
   await load();
 });
 
+async function copyText(value, label) {
+  const text = String(value || "").trim();
+  if (!text) {
+    detailState.textContent = `没有可复制的${label}`;
+    return;
+  }
+  await navigator.clipboard.writeText(text);
+  detailState.textContent = `已复制${label}`;
+}
+
+function titlePatternsFromNote(note) {
+  const match = String(note.notes || "").match(/标题公式[:：]\s*([^\n]+)/);
+  if (!match) return [];
+  return match[1].split(/\s*\/\s*|[,，]/).map((item) => item.trim()).filter(Boolean);
+}
+
+function analysisPatch(analysis) {
+  const parts = [];
+  if (analysis.titlePatterns?.length) {
+    parts.push(`标题公式：${analysis.titlePatterns.join(" / ")}`);
+  }
+  if (analysis.reason) {
+    parts.push(`AI 判断：${analysis.reason}`);
+  }
+  return {
+    category: categories.includes(analysis.categorySuggestion) ? analysis.categorySuggestion : undefined,
+    keywords: analysis.keywords || [],
+    coverTakeaways: analysis.coverTakeaways || [],
+    contentTakeaways: analysis.contentTakeaways || [],
+    topicIdeas: analysis.topicIdeas || [],
+    notes: parts.join("\n"),
+    updatedAt: new Date().toISOString()
+  };
+}
+
+reanalyzeDetailButton.addEventListener("click", async () => {
+  const note = notes.find((item) => item.id === detailNoteId);
+  if (!note) return;
+  reanalyzeDetailButton.disabled = true;
+  detailState.textContent = "AI 分析中...";
+  try {
+    const settings = await window.topicStore.getAiSettings();
+    const analysis = await window.topicAi.analyzeNoteWithAi({
+      extraction: {
+        title: note.title,
+        description: note.description || "",
+        url: note.url,
+        coverUrl: note.coverUrl,
+        tags: note.keywords || []
+      },
+      categories,
+      settings
+    });
+    const patch = analysisPatch(analysis);
+    Object.keys(patch).forEach((key) => patch[key] === undefined && delete patch[key]);
+    const updated = await window.topicStore.updateNote(note.id, patch);
+    notes = await window.topicStore.getNotes();
+    detailState.textContent = "已重新分析";
+    openDetail(updated);
+    renderSummary();
+    renderRows();
+  } catch (error) {
+    detailState.textContent = error.message || "重新分析失败";
+  } finally {
+    reanalyzeDetailButton.disabled = false;
+  }
+});
+
+copyTopicsButton.addEventListener("click", async () => {
+  const note = notes.find((item) => item.id === detailNoteId);
+  await copyText((note?.topicIdeas || []).join("\n"), "选题");
+});
+
+copyTitlePatternsButton.addEventListener("click", async () => {
+  const note = notes.find((item) => item.id === detailNoteId);
+  await copyText(titlePatternsFromNote(note).join("\n"), "标题公式");
+});
+
 closeBatchButton.addEventListener("click", () => batchDialog.close());
 
 addCategoryButton.addEventListener("click", async () => {
@@ -528,6 +657,15 @@ saveAiSettingsButton.addEventListener("click", async () => {
     customPrompt: customPromptInput.value
   });
   aiSettingsState.textContent = settings.apiKey ? "已保存" : "未设置";
+});
+
+saveExperimentalSettingsButton.addEventListener("click", async () => {
+  const settings = await window.topicStore.saveExperimentalSettings({
+    videoCover: experimentVideoCoverInput.checked,
+    screenshotFallback: experimentScreenshotFallbackInput.checked,
+    overlayMedia: experimentOverlayMediaInput.checked
+  });
+  renderExperimentalSettings(settings);
 });
 
 promptTemplateSelect.addEventListener("change", () => {

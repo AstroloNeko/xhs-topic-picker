@@ -246,7 +246,7 @@ textarea {
 .settings-grid {
   display: grid;
   gap: 16px;
-  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.9fr);
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   margin: 0 0 22px;
 }
 
@@ -475,6 +475,25 @@ td p {
   padding: 6px 8px;
 }
 
+.warning-chip {
+  background: #fff1d6;
+  border-radius: 999px;
+  color: #8a5700;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  margin-top: 8px;
+  padding: 6px 8px;
+}
+
+.warning-text {
+  color: #9a6700;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 6px 0 0;
+}
+
 .tags-cell {
   width: 190px;
 }
@@ -561,6 +580,16 @@ td p {
   position: sticky;
   top: 0;
   z-index: 2;
+}
+
+.detail-actions {
+  align-items: center;
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 20px;
 }
 
 .detail-header h2 {

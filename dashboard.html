@@ -34,6 +34,7 @@
             <option value="全部">全部</option>
             <option value="有封面">有封面</option>
             <option value="无封面">无封面</option>
+            <option value="封面异常">封面异常</option>
           </select>
         </label>
         <label>
@@ -87,6 +88,30 @@
             <button id="saveAiSettings" type="button">保存 AI 设置</button>
             <button id="resetPrompt" type="button" class="secondary">恢复默认 Prompt</button>
             <span id="aiSettingsState" class="settings-state"></span>
+          </div>
+        </div>
+
+        <div class="settings-panel">
+          <div class="settings-title">
+            <p class="eyebrow">实验功能</p>
+            <h2>封面增强识别</h2>
+          </div>
+          <p class="settings-note">这些功能默认关闭，避免影响图片帖稳定抓封面。以后测试视频封面时再逐个打开。</p>
+          <label class="check-row">
+            <input id="experimentVideoCover" type="checkbox" />
+            视频封面增强识别
+          </label>
+          <label class="check-row">
+            <input id="experimentScreenshotFallback" type="checkbox" />
+            截图兜底
+          </label>
+          <label class="check-row">
+            <input id="experimentOverlayMedia" type="checkbox" />
+            浮窗主图识别
+          </label>
+          <div class="settings-actions">
+            <button id="saveExperimentalSettings" type="button" class="secondary">保存实验设置</button>
+            <span id="experimentalSettingsState" class="settings-state"></span>
           </div>
         </div>
 
@@ -170,6 +195,12 @@
             </div>
             <button id="closeDetail" class="secondary" type="button">关闭</button>
           </header>
+          <div class="detail-actions">
+            <button id="reanalyzeDetail" type="button">重新 AI 分析</button>
+            <button id="copyTopics" type="button" class="secondary">复制选题</button>
+            <button id="copyTitlePatterns" type="button" class="secondary">复制标题公式</button>
+            <span id="detailState" class="settings-state"></span>
+          </div>
           <div class="detail-body" id="detailBody"></div>
         </div>
       </dialog>

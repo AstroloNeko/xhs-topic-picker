@@ -208,6 +208,16 @@ function renderCover(coverUrl, title) {
   }
 }
 
+function isSuspiciousCover() {
+  if (!currentExtraction) return true;
+  const source = currentExtraction.coverDataUrl || currentExtraction.coverUrl || "";
+  if (!source) return true;
+  if (!currentExtraction.coverUrl) return true;
+  if (/favicon|logo|xhslink|redbook|icon|小红书/i.test(currentExtraction.coverUrl || "")) return true;
+  if (currentExtraction.coverDataUrl && currentExtraction.coverDataUrl.length < 1200) return true;
+  return false;
+}
+
 function mergeNotesWithAi(analysis) {
   const parts = [];
   if (analysis.titlePatterns?.length) {
@@ -259,6 +269,11 @@ function applyFormNote(note) {
 async function saveCurrentNote() {
   if (!currentExtraction) return;
   await ensureCoverCache();
+  if (isSuspiciousCover() && !confirm("封面可能没抓到或疑似默认图，仍然保存吗？")) {
+    captureState.textContent = "已取消保存，可以先点“重抓”再试。";
+    captureState.classList.remove("hidden", "error");
+    return;
+  }
   await window.topicStore.saveNote({
     ...currentExtraction,
     ...getFormNote()
