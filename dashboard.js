@@ -16,6 +16,8 @@ const githubRepoInput = document.querySelector("#githubRepo");
 const intervalDaysInput = document.querySelector("#intervalDays");
 const saveUpdateSettingsButton = document.querySelector("#saveUpdateSettings");
 const checkUpdatesButton = document.querySelector("#checkUpdates");
+const openUpdateDownloadButton = document.querySelector("#openUpdateDownload");
+const versionState = document.querySelector("#versionState");
 const updateState = document.querySelector("#updateState");
 const summary = document.querySelector("#summary");
 const noteRows = document.querySelector("#noteRows");
@@ -143,6 +145,8 @@ async function load() {
 }
 
 function renderUpdateSettings(settings) {
+  const currentVersion = chrome.runtime.getManifest().version;
+  versionState.textContent = `当前版本：v${currentVersion}`;
   updateEnabledInput.checked = settings.enabled;
   githubOwnerInput.value = settings.githubOwner;
   githubRepoInput.value = settings.githubRepo;
@@ -153,7 +157,9 @@ function renderUpdateSettings(settings) {
 function updateStateLabel(settings) {
   const parts = [];
   if (settings.latestVersion) {
-    parts.push(`最新版本：${escapeHtml(settings.latestVersion)}`);
+    const currentVersion = chrome.runtime.getManifest().version;
+    const latest = escapeHtml(settings.latestVersion);
+    parts.push(`最新版本：${latest}${settings.latestVersion.replace(/^v/i, "") !== currentVersion ? "（可能有更新）" : ""}`);
   }
   if (settings.lastCheckedAt) {
     parts.push(`上次检查：${dateLabel(settings.lastCheckedAt)}`);
@@ -261,6 +267,14 @@ checkUpdatesButton.addEventListener("click", async () => {
   }
   const settings = await window.topicStore.getUpdateSettings();
   renderUpdateSettings(settings);
+  if (response?.hasUpdate && confirm(`发现新版 ${settings.latestVersion}，要打开下载页吗？`)) {
+    chrome.runtime.sendMessage({ type: "OPEN_UPDATE_DOWNLOAD" });
+  }
+});
+
+openUpdateDownloadButton.addEventListener("click", async () => {
+  const response = await chrome.runtime.sendMessage({ type: "OPEN_UPDATE_DOWNLOAD" });
+  if (response?.error) updateState.textContent = response.error;
 });
 
 clearButton.addEventListener("click", async () => {

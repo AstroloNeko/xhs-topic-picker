@@ -2,6 +2,7 @@ importScripts("storage.js", "keyword.js", "ai.js");
 
 const MENU_ID = "xhs-ai-save";
 const UPDATE_ALARM = "xhs-update-check";
+const UPDATE_NOTIFICATION_ID = "xhs-update-available";
 
 function isXhsUrl(url) {
   return /^https:\/\/www\.xiaohongshu\.com\//.test(url || "");
@@ -111,6 +112,31 @@ function zipAssetUrl(release) {
   return asset?.browser_download_url || release.zipball_url || release.html_url || "";
 }
 
+async function openUpdatePages(settings) {
+  const url = settings.latestZipUrl || settings.latestUrl;
+  if (!url) throw new Error("还没有可用下载链接，请先检查更新。");
+  await chrome.tabs.create({ url });
+  await chrome.tabs.create({ url: "chrome://extensions/" }).catch(() => {});
+}
+
+async function notifyUpdateAvailable(settings) {
+  if (!settings.latestVersion || settings.notifiedVersion === settings.latestVersion) return;
+
+  await chrome.notifications.create(UPDATE_NOTIFICATION_ID, {
+    type: "basic",
+    iconUrl: "icon.png",
+    title: "小红书选题器有新版",
+    message: `发现 ${settings.latestVersion}，是否打开下载页？`,
+    buttons: [{ title: "下载新版" }, { title: "稍后" }],
+    priority: 2
+  });
+
+  await globalThis.topicStore.saveUpdateSettings({
+    ...settings,
+    notifiedVersion: settings.latestVersion
+  });
+}
+
 async function configureUpdateAlarm() {
   const settings = await globalThis.topicStore.getUpdateSettings();
   await chrome.alarms.clear(UPDATE_ALARM);
@@ -155,6 +181,7 @@ async function checkForUpdates({ force = false } = {}) {
   const hasUpdate = isNewerVersion(latestVersion, chrome.runtime.getManifest().version);
   await chrome.action.setBadgeText({ text: hasUpdate ? "NEW" : "" });
   await chrome.action.setBadgeBackgroundColor({ color: "#187d59" });
+  if (hasUpdate) await notifyUpdateAvailable(updatedSettings);
 
   return { hasUpdate, settings: updatedSettings };
 }
@@ -184,6 +211,20 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === UPDATE_ALARM) checkForUpdates({ force: true }).catch(() => {});
 });
 
+chrome.notifications.onButtonClicked.addListener(async (notificationId, buttonIndex) => {
+  if (notificationId !== UPDATE_NOTIFICATION_ID) return;
+  const settings = await globalThis.topicStore.getUpdateSettings();
+  if (buttonIndex === 0) await openUpdatePages(settings);
+  chrome.notifications.clear(notificationId);
+});
+
+chrome.notifications.onClicked.addListener(async (notificationId) => {
+  if (notificationId !== UPDATE_NOTIFICATION_ID) return;
+  const settings = await globalThis.topicStore.getUpdateSettings();
+  await openUpdatePages(settings);
+  chrome.notifications.clear(notificationId);
+});
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "CHECK_FOR_UPDATES") {
     checkForUpdates({ force: true })
@@ -195,6 +236,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     configureUpdateAlarm()
       .then(() => sendResponse({ ok: true }))
       .catch((error) => sendResponse({ error: error.message || "更新检查设置失败" }));
+    return true;
+  }
+  if (message?.type === "OPEN_UPDATE_DOWNLOAD") {
+    globalThis.topicStore.getUpdateSettings()
+      .then(openUpdatePages)
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ error: error.message || "打开下载页失败" }));
     return true;
   }
 });

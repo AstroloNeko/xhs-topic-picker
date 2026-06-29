@@ -32,7 +32,8 @@ const DEFAULT_UPDATE_SETTINGS = {
   lastCheckedAt: "",
   latestVersion: "",
   latestUrl: "",
-  latestZipUrl: ""
+  latestZipUrl: "",
+  notifiedVersion: ""
 };
 
 function uid() {
@@ -138,7 +139,8 @@ async function saveUpdateSettings(settings) {
     lastCheckedAt: settings.lastCheckedAt || "",
     latestVersion: settings.latestVersion || "",
     latestUrl: settings.latestUrl || "",
-    latestZipUrl: settings.latestZipUrl || ""
+    latestZipUrl: settings.latestZipUrl || "",
+    notifiedVersion: settings.notifiedVersion || ""
   };
   await chrome.storage.local.set({ [STORAGE_KEYS.updateSettings]: cleaned });
   return cleaned;
