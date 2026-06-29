@@ -45,7 +45,47 @@ function imageScore(item) {
   const urlBonus = /xhscdn|sns-webpic|sns-img|spectrum/.test(item.src) ? 100000 : 0;
   const ratio = item.width && item.height ? item.width / item.height : 1;
   const ratioBonus = ratio > 0.45 && ratio < 2.4 ? 50000 : 0;
-  return area + urlBonus + ratioBonus;
+  const rectBonus = item.rect && isLikelyMainMediaRect(item.rect) ? 1000000 : 0;
+  return area + urlBonus + ratioBonus + rectBonus;
+}
+
+function rectFromElement(el) {
+  const rect = el.getBoundingClientRect();
+  return {
+    x: rect.left,
+    y: rect.top,
+    width: rect.width,
+    height: rect.height
+  };
+}
+
+function isLikelyMainMediaRect(rect) {
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+  if (!rect || rect.width < 180 || rect.height < 180) return false;
+  if (rect.x > viewportWidth * 0.62) return false;
+  if (rect.y > viewportHeight * 0.75) return false;
+  return true;
+}
+
+function mainMediaRect() {
+  const candidates = [
+    ...Array.from(document.querySelectorAll("video, canvas")),
+    ...Array.from(document.images),
+    ...Array.from(document.querySelectorAll("[style], .swiper-slide, .note-slider, .media-container"))
+  ]
+    .map((el) => ({
+      el,
+      rect: rectFromElement(el),
+      src:
+        el.tagName === "IMG"
+          ? normalizeUrl(el.currentSrc || bestFromSrcset(el.srcset) || el.src)
+          : normalizeUrl(backgroundImageUrl(el))
+    }))
+    .filter((item) => isLikelyMainMediaRect(item.rect) && !isGenericImage(item.src))
+    .sort((a, b) => b.rect.width * b.rect.height - a.rect.width * a.rect.height);
+
+  return candidates[0]?.rect || null;
 }
 
 function videoPosterCandidates() {
@@ -58,9 +98,10 @@ function videoPosterCandidates() {
           video.getAttribute("x5-video-poster")
       ),
       width: video.videoWidth || video.clientWidth || 0,
-      height: video.videoHeight || video.clientHeight || 0
+      height: video.videoHeight || video.clientHeight || 0,
+      rect: rectFromElement(video)
     }))
-    .filter((item) => item.src && !isGenericImage(item.src));
+    .filter((item) => item.src && !isGenericImage(item.src) && isLikelyMainMediaRect(item.rect));
 }
 
 function firstImage() {
@@ -79,9 +120,10 @@ function firstImage() {
           img.src
       ),
       width: img.naturalWidth || img.width,
-      height: img.naturalHeight || img.height
+      height: img.naturalHeight || img.height,
+      rect: rectFromElement(img)
     }))
-    .filter((img) => img.src && !isGenericImage(img.src) && img.width >= 180 && img.height >= 180)
+    .filter((img) => img.src && !isGenericImage(img.src) && img.width >= 180 && img.height >= 180 && isLikelyMainMediaRect(img.rect))
     .sort((a, b) => imageScore(b) - imageScore(a));
 
   if (images[0]?.src) return images[0].src;
@@ -93,9 +135,10 @@ function firstImage() {
     .map((el) => ({
       src: normalizeUrl(backgroundImageUrl(el)),
       width: el.clientWidth || 0,
-      height: el.clientHeight || 0
+      height: el.clientHeight || 0,
+      rect: rectFromElement(el)
     }))
-    .filter((item) => item.src && !isGenericImage(item.src) && item.width >= 160 && item.height >= 120)
+    .filter((item) => item.src && !isGenericImage(item.src) && item.width >= 160 && item.height >= 120 && isLikelyMainMediaRect(item.rect))
     .sort((a, b) => imageScore(b) - imageScore(a));
 
   return backgroundCandidates[0]?.src || "";
@@ -143,21 +186,25 @@ async function extractNoteWithRetry() {
   const description = extractDescription();
   const fullText = `${title} ${description}`;
   let coverUrl = firstImage();
+  let coverRect = mainMediaRect();
 
   if (!coverUrl) {
     await sleep(1200);
     coverUrl = firstImage();
+    coverRect = mainMediaRect();
   }
 
   if (!coverUrl) {
     await sleep(1800);
     coverUrl = firstImage();
+    coverRect = mainMediaRect();
   }
 
   return {
     title,
     description,
     coverUrl,
+    coverRect,
     url: location.href,
     tags: extractTags(fullText),
     capturedAt: new Date().toISOString()

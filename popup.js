@@ -156,13 +156,42 @@ async function ensureCoverCache() {
 async function captureVisibleCover() {
   if (!currentWindowId || !chrome.tabs?.captureVisibleTab) return "";
   try {
-    return await chrome.tabs.captureVisibleTab(currentWindowId, {
+    const dataUrl = await chrome.tabs.captureVisibleTab(currentWindowId, {
       format: "jpeg",
       quality: 70
     });
+    if (currentExtraction?.coverRect) {
+      return cropDataUrl(dataUrl, currentExtraction.coverRect);
+    }
+    return dataUrl;
   } catch (_error) {
     return "";
   }
+}
+
+function cropDataUrl(dataUrl, rect) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const scaleX = image.width / window.innerWidth;
+      const scaleY = image.height / window.innerHeight;
+      const x = Math.max(0, rect.x * scaleX);
+      const y = Math.max(0, rect.y * scaleY);
+      const width = Math.min(image.width - x, rect.width * scaleX);
+      const height = Math.min(image.height - y, rect.height * scaleY);
+      if (width < 80 || height < 80) {
+        resolve(dataUrl);
+        return;
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(width);
+      canvas.height = Math.round(height);
+      canvas.getContext("2d").drawImage(image, x, y, width, height, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.82));
+    };
+    image.onerror = () => resolve(dataUrl);
+    image.src = dataUrl;
+  });
 }
 
 function renderCover(coverUrl, title) {
