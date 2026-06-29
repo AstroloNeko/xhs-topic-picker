@@ -1,0 +1,272 @@
+const categoryFilter = document.querySelector("#categoryFilter");
+const searchInput = document.querySelector("#search");
+const newCategoryInput = document.querySelector("#newCategory");
+const addCategoryButton = document.querySelector("#addCategory");
+const apiKeyInput = document.querySelector("#apiKey");
+const modelNameInput = document.querySelector("#modelName");
+const maxTokensInput = document.querySelector("#maxTokens");
+const focusPointsInput = document.querySelector("#focusPoints");
+const customPromptInput = document.querySelector("#customPrompt");
+const saveAiSettingsButton = document.querySelector("#saveAiSettings");
+const resetPromptButton = document.querySelector("#resetPrompt");
+const aiSettingsState = document.querySelector("#aiSettingsState");
+const updateEnabledInput = document.querySelector("#updateEnabled");
+const githubOwnerInput = document.querySelector("#githubOwner");
+const githubRepoInput = document.querySelector("#githubRepo");
+const intervalDaysInput = document.querySelector("#intervalDays");
+const saveUpdateSettingsButton = document.querySelector("#saveUpdateSettings");
+const checkUpdatesButton = document.querySelector("#checkUpdates");
+const updateState = document.querySelector("#updateState");
+const summary = document.querySelector("#summary");
+const noteRows = document.querySelector("#noteRows");
+const emptyState = document.querySelector("#emptyState");
+const exportButton = document.querySelector("#exportCsv");
+const clearButton = document.querySelector("#clearAll");
+
+let notes = [];
+let categories = [];
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => {
+    const map = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;"
+    };
+    return map[char];
+  });
+}
+
+function dateLabel(value) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(new Date(value));
+}
+
+function filteredNotes() {
+  const category = categoryFilter.value;
+  const query = searchInput.value.trim().toLowerCase();
+
+  return notes.filter((note) => {
+    const categoryMatch = category === "全部" || note.category === category;
+    const text = [
+      note.title,
+      note.category,
+      note.notes,
+      ...(note.keywords || []),
+      ...(note.coverTakeaways || []),
+      ...(note.contentTakeaways || []),
+      ...(note.topicIdeas || [])
+    ]
+      .join(" ")
+      .toLowerCase();
+    return categoryMatch && (!query || text.includes(query));
+  });
+}
+
+function renderFilters() {
+  categoryFilter.innerHTML = ["全部", ...categories]
+    .map((item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`)
+    .join("");
+}
+
+function renderSummary() {
+  const counts = categories.map((category) => ({
+    category,
+    count: notes.filter((note) => note.category === category).length
+  }));
+
+  summary.innerHTML = counts
+    .map(
+      (item) => `
+        <button class="summary-card" data-category="${escapeHtml(item.category)}">
+          <span>${escapeHtml(item.category)}</span>
+          <strong>${item.count}</strong>
+        </button>
+      `
+    )
+    .join("");
+}
+
+function renderRows() {
+  const rows = filteredNotes();
+  emptyState.classList.toggle("hidden", rows.length > 0);
+  noteRows.innerHTML = rows
+    .map(
+      (note) => `
+        <tr>
+          <td class="cover-cell">${
+            note.coverUrl
+              ? `<img src="${escapeHtml(note.coverUrl)}" alt="${escapeHtml(note.title)}" />`
+              : "<span class=\"no-cover\">无</span>"
+          }</td>
+          <td><span class="pill">${escapeHtml(note.category)}</span></td>
+          <td class="title-cell">
+            <a href="${escapeHtml(note.url)}" target="_blank" rel="noreferrer">${escapeHtml(note.title || "未命名笔记")}</a>
+          </td>
+          <td>${(note.keywords || []).map((word) => `<span class="tag">${escapeHtml(word)}</span>`).join("")}</td>
+          <td>${(note.coverTakeaways || []).map((item) => `<p>${escapeHtml(item)}</p>`).join("")}</td>
+          <td>${(note.contentTakeaways || []).map((item) => `<p>${escapeHtml(item)}</p>`).join("")}</td>
+          <td>${(note.topicIdeas || []).map((idea) => `<p>${escapeHtml(idea)}</p>`).join("")}</td>
+          <td>${escapeHtml(note.notes || "")}</td>
+          <td>${dateLabel(note.capturedAt)}</td>
+          <td><button class="text-button" data-delete="${escapeHtml(note.id)}">删除</button></td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+async function load() {
+  categories = await window.topicStore.getCategories();
+  notes = await window.topicStore.getNotes();
+  const settings = await window.topicStore.getAiSettings();
+  const updateSettings = await window.topicStore.getUpdateSettings();
+  apiKeyInput.value = settings.apiKey;
+  modelNameInput.value = settings.model;
+  maxTokensInput.value = settings.maxTokens;
+  focusPointsInput.value = settings.focusPoints;
+  customPromptInput.value = settings.customPrompt;
+  aiSettingsState.textContent = settings.apiKey ? "已保存" : "未设置";
+  renderUpdateSettings(updateSettings);
+  const selected = categoryFilter.value || "全部";
+  renderFilters();
+  if (["全部", ...categories].includes(selected)) categoryFilter.value = selected;
+  renderSummary();
+  renderRows();
+}
+
+function renderUpdateSettings(settings) {
+  updateEnabledInput.checked = settings.enabled;
+  githubOwnerInput.value = settings.githubOwner;
+  githubRepoInput.value = settings.githubRepo;
+  intervalDaysInput.value = settings.intervalDays;
+  updateState.innerHTML = updateStateLabel(settings);
+}
+
+function updateStateLabel(settings) {
+  const parts = [];
+  if (settings.latestVersion) {
+    parts.push(`最新版本：${escapeHtml(settings.latestVersion)}`);
+  }
+  if (settings.lastCheckedAt) {
+    parts.push(`上次检查：${dateLabel(settings.lastCheckedAt)}`);
+  }
+  if (settings.latestUrl) {
+    parts.push(`<a href="${escapeHtml(settings.latestUrl)}" target="_blank" rel="noreferrer">打开 Release</a>`);
+  }
+  if (settings.latestZipUrl) {
+    parts.push(`<a href="${escapeHtml(settings.latestZipUrl)}" target="_blank" rel="noreferrer">下载 zip</a>`);
+  }
+  return parts.join(" · ") || "未配置 GitHub 更新检查。";
+}
+
+function toCsvValue(value) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+function exportCsv() {
+  const header = ["栏目", "标题", "关键词", "封面共性", "内容共性", "选题内容", "备注", "链接", "封面", "采集时间"];
+  const rows = filteredNotes().map((note) => [
+    note.category,
+    note.title,
+    (note.keywords || []).join(" / "),
+    (note.coverTakeaways || []).join(" / "),
+    (note.contentTakeaways || []).join(" / "),
+    (note.topicIdeas || []).join(" / "),
+    note.notes,
+    note.url,
+    note.coverUrl,
+    note.capturedAt
+  ]);
+  const csv = [header, ...rows].map((row) => row.map(toCsvValue).join(",")).join("\n");
+  const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `小红书选题库-${new Date().toISOString().slice(0, 10)}.csv`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+categoryFilter.addEventListener("change", renderRows);
+searchInput.addEventListener("input", renderRows);
+exportButton.addEventListener("click", exportCsv);
+
+summary.addEventListener("click", (event) => {
+  const card = event.target.closest("[data-category]");
+  if (!card) return;
+  categoryFilter.value = card.dataset.category;
+  renderRows();
+});
+
+noteRows.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-delete]");
+  if (!button) return;
+  await window.topicStore.deleteNote(button.dataset.delete);
+  await load();
+});
+
+addCategoryButton.addEventListener("click", async () => {
+  const value = newCategoryInput.value.trim();
+  if (!value) return;
+  categories = await window.topicStore.saveCategories([...categories, value]);
+  newCategoryInput.value = "";
+  await load();
+});
+
+saveAiSettingsButton.addEventListener("click", async () => {
+  const settings = await window.topicStore.saveAiSettings({
+    apiKey: apiKeyInput.value,
+    model: modelNameInput.value,
+    maxTokens: maxTokensInput.value,
+    focusPoints: focusPointsInput.value,
+    customPrompt: customPromptInput.value
+  });
+  aiSettingsState.textContent = settings.apiKey ? "已保存" : "未设置";
+});
+
+resetPromptButton.addEventListener("click", () => {
+  customPromptInput.value = window.topicStore.DEFAULT_CUSTOM_PROMPT;
+  aiSettingsState.textContent = "已恢复默认 Prompt，记得保存";
+});
+
+saveUpdateSettingsButton.addEventListener("click", async () => {
+  const settings = await window.topicStore.saveUpdateSettings({
+    enabled: updateEnabledInput.checked,
+    githubOwner: githubOwnerInput.value,
+    githubRepo: githubRepoInput.value,
+    intervalDays: intervalDaysInput.value
+  });
+  renderUpdateSettings(settings);
+  chrome.runtime.sendMessage({ type: "CONFIGURE_UPDATE_ALARM" });
+});
+
+checkUpdatesButton.addEventListener("click", async () => {
+  updateState.textContent = "正在检查 GitHub Release...";
+  const response = await chrome.runtime.sendMessage({ type: "CHECK_FOR_UPDATES" });
+  if (response?.error) {
+    updateState.textContent = response.error;
+    return;
+  }
+  if (response?.skipped) {
+    updateState.textContent = "请先启用更新检查，并填写 GitHub 用户和仓库名。";
+    return;
+  }
+  const settings = await window.topicStore.getUpdateSettings();
+  renderUpdateSettings(settings);
+});
+
+clearButton.addEventListener("click", async () => {
+  if (!confirm("确定清空所有本地采集内容吗？")) return;
+  await window.topicStore.clearNotes();
+  await load();
+});
+
+load();

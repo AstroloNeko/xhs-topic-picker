@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>小红书选题表格库</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="dashboard">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">本地资料库</p>
+          <h1>选题表格</h1>
+        </div>
+        <div class="actions">
+          <button id="exportCsv" class="secondary">导出 CSV</button>
+          <button id="clearAll" class="danger">清空</button>
+        </div>
+      </header>
+
+      <section class="toolbar">
+        <label>
+          栏目
+          <select id="categoryFilter"></select>
+        </label>
+        <label>
+          搜索
+          <input id="search" type="search" placeholder="标题 / 关键词 / 备注" />
+        </label>
+        <label>
+          新增栏目
+          <div class="inline-control">
+            <input id="newCategory" type="text" placeholder="如：人物速写" />
+            <button id="addCategory" type="button">添加</button>
+          </div>
+        </label>
+      </section>
+
+      <section class="settings-grid">
+        <div class="settings-panel">
+          <div class="settings-title">
+            <p class="eyebrow">AI 设置</p>
+            <h2>DeepSeek 直连分析</h2>
+          </div>
+          <label>
+            API Key
+            <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off" />
+          </label>
+          <label>
+            模型
+            <input id="modelName" type="text" />
+          </label>
+          <label>
+            输出长度
+            <input id="maxTokens" type="number" min="400" max="4000" step="100" />
+          </label>
+          <label class="wide-field">
+            分析重点
+            <textarea id="focusPoints" rows="2"></textarea>
+          </label>
+          <label class="wide-field">
+            自定义 Prompt
+            <textarea id="customPrompt" rows="4" placeholder="比如：更偏向绘画教程拆解，少写泛泛建议，多输出标题公式"></textarea>
+          </label>
+          <div class="settings-actions">
+            <button id="saveAiSettings" type="button">保存 AI 设置</button>
+            <button id="resetPrompt" type="button" class="secondary">恢复默认 Prompt</button>
+            <span id="aiSettingsState" class="settings-state"></span>
+          </div>
+        </div>
+
+        <div class="settings-panel">
+          <div class="settings-title">
+            <p class="eyebrow">更新检查</p>
+            <h2>GitHub Release</h2>
+          </div>
+          <label class="check-row">
+            <input id="updateEnabled" type="checkbox" />
+            启用自动检查
+          </label>
+          <label>
+            GitHub 用户
+            <input id="githubOwner" type="text" placeholder="owner" />
+          </label>
+          <label>
+            仓库名
+            <input id="githubRepo" type="text" placeholder="repo" />
+          </label>
+          <label>
+            间隔天数
+            <input id="intervalDays" type="number" min="1" max="30" />
+          </label>
+          <p class="settings-note">插件会提示新版，但已解压扩展不能静默覆盖自身文件。</p>
+          <div class="settings-actions">
+            <button id="saveUpdateSettings" type="button">保存更新设置</button>
+            <button id="checkUpdates" type="button" class="secondary">立即检查</button>
+          </div>
+          <p id="updateState" class="settings-note"></p>
+        </div>
+      </section>
+
+      <section class="summary-grid" id="summary"></section>
+
+      <section class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>封面</th>
+              <th>栏目</th>
+              <th>标题</th>
+              <th>关键词</th>
+              <th>封面共性</th>
+              <th>内容共性</th>
+              <th>选题内容</th>
+              <th>备注</th>
+              <th>采集时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="noteRows"></tbody>
+        </table>
+        <div id="emptyState" class="empty hidden">还没有采集内容。打开小红书笔记后点击插件保存。</div>
+      </section>
+    </main>
+
+    <script src="storage.js"></script>
+    <script src="dashboard.js"></script>
+  </body>
+</html>
