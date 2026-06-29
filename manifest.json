@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "小红书选题器",
   "description": "采集小红书爆款笔记的封面、标题、关键词和选题，按栏目本地保存为表格。",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "action": {
     "default_title": "采集选题",
     "default_popup": "popup.html",

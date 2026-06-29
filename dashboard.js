@@ -173,6 +173,77 @@ function updateStateLabel(settings) {
   return parts.join(" · ") || "未配置 GitHub 更新检查。";
 }
 
+function parseVersion(value) {
+  return String(value || "")
+    .replace(/^v/i, "")
+    .split(/[.-]/)
+    .map((part) => Number.parseInt(part, 10) || 0);
+}
+
+function isNewerVersion(remote, current) {
+  const a = parseVersion(remote);
+  const b = parseVersion(current);
+  const length = Math.max(a.length, b.length);
+  for (let i = 0; i < length; i += 1) {
+    if ((a[i] || 0) > (b[i] || 0)) return true;
+    if ((a[i] || 0) < (b[i] || 0)) return false;
+  }
+  return false;
+}
+
+function zipAssetUrl(release) {
+  const asset = (release.assets || []).find((item) => /\.zip$/i.test(item.name || ""));
+  return asset?.browser_download_url || release.zipball_url || release.html_url || "";
+}
+
+function timeout(ms, message) {
+  return new Promise((_, reject) => {
+    setTimeout(() => reject(new Error(message)), ms);
+  });
+}
+
+async function checkReleaseDirectly() {
+  const githubOwner = githubOwnerInput.value.trim();
+  const githubRepo = githubRepoInput.value.trim();
+  if (!githubOwner || !githubRepo) {
+    throw new Error("请先填写 GitHub 用户和仓库名。");
+  }
+
+  const response = await Promise.race([
+    fetch(`https://api.github.com/repos/${githubOwner}/${githubRepo}/releases/latest`, {
+      headers: { Accept: "application/vnd.github+json" }
+    }),
+    timeout(12000, "检查超时，请确认网络能访问 GitHub。")
+  ]);
+  const release = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error("没有找到最新 Release。请先在 GitHub 发布一个 Release，并上传 zip 附件。");
+    }
+    throw new Error(release.message || `GitHub 检查失败：${response.status}`);
+  }
+
+  const currentVersion = chrome.runtime.getManifest().version;
+  const latestVersion = release.tag_name || "";
+  const latestUrl = release.html_url || `https://github.com/${githubOwner}/${githubRepo}/releases`;
+  const latestZipUrl = zipAssetUrl(release);
+  const settings = await window.topicStore.saveUpdateSettings({
+    enabled: updateEnabledInput.checked,
+    githubOwner,
+    githubRepo,
+    intervalDays: intervalDaysInput.value,
+    lastCheckedAt: new Date().toISOString(),
+    latestVersion,
+    latestUrl,
+    latestZipUrl
+  });
+
+  return {
+    hasUpdate: isNewerVersion(latestVersion, currentVersion),
+    settings
+  };
+}
+
 function toCsvValue(value) {
   return `"${String(value ?? "").replace(/"/g, '""')}"`;
 }
@@ -256,25 +327,27 @@ saveUpdateSettingsButton.addEventListener("click", async () => {
 
 checkUpdatesButton.addEventListener("click", async () => {
   updateState.textContent = "正在检查 GitHub Release...";
-  const response = await chrome.runtime.sendMessage({ type: "CHECK_FOR_UPDATES" });
-  if (response?.error) {
-    updateState.textContent = response.error;
+  try {
+    const response = await checkReleaseDirectly();
+    renderUpdateSettings(response.settings);
+    if (response.hasUpdate && confirm(`发现新版 ${response.settings.latestVersion}，要打开下载页吗？`)) {
+      chrome.runtime.sendMessage({ type: "OPEN_UPDATE_DOWNLOAD" });
+    }
+  } catch (error) {
+    updateState.textContent = error.message || "检查更新失败。";
     return;
-  }
-  if (response?.skipped) {
-    updateState.textContent = "请先启用更新检查，并填写 GitHub 用户和仓库名。";
-    return;
-  }
-  const settings = await window.topicStore.getUpdateSettings();
-  renderUpdateSettings(settings);
-  if (response?.hasUpdate && confirm(`发现新版 ${settings.latestVersion}，要打开下载页吗？`)) {
-    chrome.runtime.sendMessage({ type: "OPEN_UPDATE_DOWNLOAD" });
   }
 });
 
 openUpdateDownloadButton.addEventListener("click", async () => {
-  const response = await chrome.runtime.sendMessage({ type: "OPEN_UPDATE_DOWNLOAD" });
-  if (response?.error) updateState.textContent = response.error;
+  const settings = await window.topicStore.getUpdateSettings();
+  const url = settings.latestZipUrl || settings.latestUrl;
+  if (!url) {
+    updateState.textContent = "还没有下载链接，请先点“立即检查”。";
+    return;
+  }
+  window.open(url, "_blank", "noopener");
+  window.open("chrome://extensions/", "_blank", "noopener");
 });
 
 clearButton.addEventListener("click", async () => {
