@@ -152,7 +152,7 @@ async function configureUpdateAlarm() {
 async function configureActionMode() {
   const settings = await globalThis.topicStore.getUiSettings();
   await chrome.action.setPopup({ popup: settings.pinned ? "" : "popup.html" });
-  await chrome.sidePanel?.setPanelBehavior({ openPanelOnActionClick: false });
+  await chrome.sidePanel?.setPanelBehavior({ openPanelOnActionClick: settings.pinned });
 }
 
 async function checkForUpdates({ force = false } = {}) {
