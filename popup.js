@@ -12,6 +12,7 @@ const notesInput = document.querySelector("#notes");
 const refreshButton = document.querySelector("#refresh");
 const aiAnalyzeButton = document.querySelector("#aiAnalyze");
 const saveNoteButton = document.querySelector("#saveNote");
+const pickCoverButton = document.querySelector("#pickCover");
 const dashboardButton = document.querySelector("#openDashboard");
 const pinPanelButton = document.querySelector("#pinPanel");
 
@@ -104,6 +105,23 @@ async function extractFromPage() {
   }
 }
 
+async function sendToActiveTab(message) {
+  if (!currentTabId) {
+    const tab = await getActiveTab();
+    currentTabId = tab?.id;
+    currentWindowId = tab?.windowId;
+  }
+  try {
+    return await chrome.tabs.sendMessage(currentTabId, message);
+  } catch (_error) {
+    await chrome.scripting.executeScript({
+      target: { tabId: currentTabId },
+      files: ["content.js"]
+    });
+    return chrome.tabs.sendMessage(currentTabId, message);
+  }
+}
+
 function renderExtraction(data) {
   currentExtraction = data;
   if (data.cachedForm) {
@@ -173,8 +191,10 @@ function cropDataUrl(dataUrl, rect) {
   return new Promise((resolve) => {
     const image = new Image();
     image.onload = () => {
-      const scaleX = image.width / window.innerWidth;
-      const scaleY = image.height / window.innerHeight;
+      const viewportWidth = rect.viewportWidth || image.width;
+      const viewportHeight = rect.viewportHeight || image.height;
+      const scaleX = image.width / viewportWidth;
+      const scaleY = image.height / viewportHeight;
       const x = Math.max(0, rect.x * scaleX);
       const y = Math.max(0, rect.y * scaleY);
       const width = Math.min(image.width - x, rect.width * scaleX);
@@ -287,6 +307,35 @@ form.addEventListener("submit", async (event) => {
 
 refreshButton.addEventListener("click", capture);
 saveNoteButton.addEventListener("click", saveCurrentNote);
+pickCoverButton.addEventListener("click", async () => {
+  if (!currentExtraction) return;
+  captureState.textContent = "请在页面主图/视频区域上移动鼠标并点击，按 Esc 取消。";
+  captureState.classList.remove("hidden", "error");
+  pickCoverButton.disabled = true;
+  try {
+    const picked = await sendToActiveTab({ type: "XHS_PICK_COVER" });
+    if (!picked || picked.canceled) {
+      captureState.textContent = "已取消选择封面。";
+      return;
+    }
+    currentExtraction.coverUrl = picked.coverUrl || currentExtraction.coverUrl || "";
+    currentExtraction.coverRect = picked.coverRect || currentExtraction.coverRect;
+    currentExtraction.coverDataUrl = currentExtraction.coverUrl
+      ? await window.topicCover.cacheCoverImage(currentExtraction.coverUrl)
+      : "";
+    if (!currentExtraction.coverDataUrl) {
+      currentExtraction.coverDataUrl = await captureVisibleCover();
+    }
+    renderCover(currentExtraction.coverUrl, currentExtraction.title);
+    await setCachedDraft();
+    captureState.textContent = "已选择封面。";
+  } catch (error) {
+    captureState.textContent = error.message || "选择封面失败。";
+    captureState.classList.add("error");
+  } finally {
+    pickCoverButton.disabled = false;
+  }
+});
 aiAnalyzeButton.addEventListener("click", async () => {
   if (!currentExtraction) return;
 

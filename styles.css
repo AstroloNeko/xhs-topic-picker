@@ -184,7 +184,7 @@ textarea {
   border-bottom: 1px solid var(--line);
   display: grid;
   gap: 8px;
-  grid-template-columns: 1fr 1fr 0.8fr;
+  grid-template-columns: 1fr 1fr 0.8fr 0.9fr;
   margin: -2px 0 2px;
   padding-bottom: 12px;
   position: sticky;
