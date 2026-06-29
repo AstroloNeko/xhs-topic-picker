@@ -149,6 +149,12 @@ async function configureUpdateAlarm() {
   });
 }
 
+async function configureActionMode() {
+  const settings = await globalThis.topicStore.getUiSettings();
+  await chrome.action.setPopup({ popup: settings.pinned ? "" : "popup.html" });
+  await chrome.sidePanel?.setPanelBehavior({ openPanelOnActionClick: false });
+}
+
 async function checkForUpdates({ force = false } = {}) {
   const settings = await globalThis.topicStore.getUpdateSettings();
   if (!settings.enabled || !settings.githubOwner || !settings.githubRepo) {
@@ -196,14 +202,20 @@ chrome.runtime.onInstalled.addListener(() => {
       documentUrlPatterns: ["https://www.xiaohongshu.com/*"]
     });
   });
-  chrome.sidePanel?.setPanelBehavior({ openPanelOnActionClick: true });
+  configureActionMode();
   configureUpdateAlarm();
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  chrome.sidePanel?.setPanelBehavior({ openPanelOnActionClick: true });
+  configureActionMode();
   configureUpdateAlarm();
   checkForUpdates().catch(() => {});
+});
+
+chrome.action.onClicked.addListener(async (tab) => {
+  const settings = await globalThis.topicStore.getUiSettings();
+  if (!settings.pinned || !chrome.sidePanel?.open) return;
+  await chrome.sidePanel.open({ windowId: tab.windowId });
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
@@ -246,6 +258,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .then(openUpdatePages)
       .then(() => sendResponse({ ok: true }))
       .catch((error) => sendResponse({ error: error.message || "打开下载页失败" }));
+    return true;
+  }
+  if (message?.type === "SET_PINNED_MODE") {
+    globalThis.topicStore.saveUiSettings({ pinned: message.pinned })
+      .then(configureActionMode)
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ error: error.message || "切换钉住模式失败" }));
     return true;
   }
 });

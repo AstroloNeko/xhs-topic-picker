@@ -13,10 +13,12 @@ const refreshButton = document.querySelector("#refresh");
 const aiAnalyzeButton = document.querySelector("#aiAnalyze");
 const saveNoteButton = document.querySelector("#saveNote");
 const dashboardButton = document.querySelector("#openDashboard");
+const pinPanelButton = document.querySelector("#pinPanel");
 
 let currentExtraction = null;
 let currentCategories = [];
 let currentTabId = null;
+const isSidePanel = document.body.classList.contains("sidepanel-body");
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => {
@@ -264,6 +266,28 @@ aiAnalyzeButton.addEventListener("click", async () => {
   }
 });
 dashboardButton.addEventListener("click", () => chrome.runtime.openOptionsPage());
+
+async function setPinnedMode(pinned) {
+  await window.topicStore.saveUiSettings({ pinned });
+  await chrome.runtime.sendMessage({ type: "SET_PINNED_MODE", pinned }).catch(() => {});
+}
+
+pinPanelButton.addEventListener("click", async () => {
+  if (isSidePanel) {
+    await setPinnedMode(false);
+    pinPanelButton.textContent = "钉";
+    pinPanelButton.title = "已取消钉住，下次点击图标打开小窗口";
+    setTimeout(() => window.close(), 150);
+    return;
+  }
+
+  await setPinnedMode(true);
+  const currentWindow = await chrome.windows.getCurrent();
+  if (chrome.sidePanel?.open && currentWindow?.id) {
+    await chrome.sidePanel.open({ windowId: currentWindow.id });
+  }
+  window.close();
+});
 
 form.addEventListener("input", setCachedDraft);
 form.addEventListener("change", setCachedDraft);

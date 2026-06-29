@@ -142,6 +142,11 @@ textarea {
   gap: 16px;
 }
 
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .icon-button {
   align-items: center;
   border-radius: 8px;

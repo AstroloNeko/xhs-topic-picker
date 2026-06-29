@@ -2,7 +2,8 @@ const STORAGE_KEYS = {
   notes: "notes",
   categories: "categories",
   aiSettings: "aiSettings",
-  updateSettings: "updateSettings"
+  updateSettings: "updateSettings",
+  uiSettings: "uiSettings"
 };
 
 const DEFAULT_CATEGORIES = ["绘画教程", "稿件展示", "素材参考", "运营拆解"];
@@ -34,6 +35,10 @@ const DEFAULT_UPDATE_SETTINGS = {
   latestUrl: "",
   latestZipUrl: "",
   notifiedVersion: ""
+};
+
+const DEFAULT_UI_SETTINGS = {
+  pinned: false
 };
 
 function uid() {
@@ -147,11 +152,27 @@ async function saveUpdateSettings(settings) {
   return cleaned;
 }
 
+async function getUiSettings() {
+  return {
+    ...DEFAULT_UI_SETTINGS,
+    ...(await getStored(STORAGE_KEYS.uiSettings, DEFAULT_UI_SETTINGS))
+  };
+}
+
+async function saveUiSettings(settings) {
+  const cleaned = {
+    pinned: Boolean(settings.pinned)
+  };
+  await chrome.storage.local.set({ [STORAGE_KEYS.uiSettings]: cleaned });
+  return cleaned;
+}
+
 globalThis.topicStore = {
   DEFAULT_CATEGORIES,
   DEFAULT_AI_SETTINGS,
   DEFAULT_CUSTOM_PROMPT,
   DEFAULT_UPDATE_SETTINGS,
+  DEFAULT_UI_SETTINGS,
   getCategories,
   saveCategories,
   getNotes,
@@ -162,5 +183,7 @@ globalThis.topicStore = {
   getAiSettings,
   saveAiSettings,
   getUpdateSettings,
-  saveUpdateSettings
+  saveUpdateSettings,
+  getUiSettings,
+  saveUiSettings
 };
