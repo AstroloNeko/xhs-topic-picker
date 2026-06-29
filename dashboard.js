@@ -1,9 +1,12 @@
 const categoryFilter = document.querySelector("#categoryFilter");
 const searchInput = document.querySelector("#search");
+const coverFilter = document.querySelector("#coverFilter");
+const aiFilter = document.querySelector("#aiFilter");
 const newCategoryInput = document.querySelector("#newCategory");
 const addCategoryButton = document.querySelector("#addCategory");
 const apiKeyInput = document.querySelector("#apiKey");
 const modelNameInput = document.querySelector("#modelName");
+const promptTemplateSelect = document.querySelector("#promptTemplate");
 const maxTokensInput = document.querySelector("#maxTokens");
 const focusPointsInput = document.querySelector("#focusPoints");
 const customPromptInput = document.querySelector("#customPrompt");
@@ -27,11 +30,36 @@ const detailCategory = document.querySelector("#detailCategory");
 const detailTitle = document.querySelector("#detailTitle");
 const detailBody = document.querySelector("#detailBody");
 const closeDetailButton = document.querySelector("#closeDetail");
+const editDialog = document.querySelector("#editDialog");
+const editForm = document.querySelector("#editForm");
+const closeEditButton = document.querySelector("#closeEdit");
+const editCategoryInput = document.querySelector("#editCategory");
+const editTitleInput = document.querySelector("#editTitle");
+const editKeywordsInput = document.querySelector("#editKeywords");
+const editCoverTakeawaysInput = document.querySelector("#editCoverTakeaways");
+const editContentTakeawaysInput = document.querySelector("#editContentTakeaways");
+const editTopicIdeasInput = document.querySelector("#editTopicIdeas");
+const editNotesInput = document.querySelector("#editNotes");
+const batchDialog = document.querySelector("#batchDialog");
+const batchBody = document.querySelector("#batchBody");
+const closeBatchButton = document.querySelector("#closeBatch");
+const selectAllRowsInput = document.querySelector("#selectAllRows");
+const selectionCount = document.querySelector("#selectionCount");
+const bulkCategory = document.querySelector("#bulkCategory");
+const bulkMoveButton = document.querySelector("#bulkMove");
+const bulkAnalyzeButton = document.querySelector("#bulkAnalyze");
+const bulkDeleteButton = document.querySelector("#bulkDelete");
+const exportJsonButton = document.querySelector("#exportJson");
+const importJsonButton = document.querySelector("#importJson");
+const importJsonFile = document.querySelector("#importJsonFile");
 const exportButton = document.querySelector("#exportCsv");
 const clearButton = document.querySelector("#clearAll");
 
 let notes = [];
 let categories = [];
+let promptTemplates = [];
+let selectedIds = new Set();
+let editingNoteId = null;
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => {
@@ -59,9 +87,21 @@ function dateLabel(value) {
 function filteredNotes() {
   const category = categoryFilter.value;
   const query = searchInput.value.trim().toLowerCase();
+  const cover = coverFilter.value;
+  const ai = aiFilter.value;
 
   return notes.filter((note) => {
     const categoryMatch = category === "全部" || note.category === category;
+    const hasCover = Boolean(note.coverDataUrl || note.coverUrl);
+    const coverMatch =
+      cover === "全部" || (cover === "有封面" && hasCover) || (cover === "无封面" && !hasCover);
+    const hasAi = Boolean(
+      (note.coverTakeaways || []).length ||
+        (note.contentTakeaways || []).length ||
+        (note.topicIdeas || []).length ||
+        (note.notes || "").includes("AI 判断")
+    );
+    const aiMatch = ai === "全部" || (ai === "已分析" && hasAi) || (ai === "未分析" && !hasAi);
     const text = [
       note.title,
       note.category,
@@ -73,13 +113,23 @@ function filteredNotes() {
     ]
       .join(" ")
       .toLowerCase();
-    return categoryMatch && (!query || text.includes(query));
+    return categoryMatch && coverMatch && aiMatch && (!query || text.includes(query));
   });
 }
 
 function renderFilters() {
-  categoryFilter.innerHTML = ["全部", ...categories]
+  const categoryOptions = ["全部", ...categories]
     .map((item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`)
+    .join("");
+  categoryFilter.innerHTML = categoryOptions;
+  bulkCategory.innerHTML = categories
+    .map((item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`)
+    .join("");
+  editCategoryInput.innerHTML = categories
+    .map((item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`)
+    .join("");
+  promptTemplateSelect.innerHTML = promptTemplates
+    .map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`)
     .join("");
 }
 
@@ -128,11 +178,15 @@ function renderNoteText(value) {
 
 function renderRows() {
   const rows = filteredNotes();
+  selectedIds = new Set([...selectedIds].filter((id) => rows.some((note) => note.id === id)));
   emptyState.classList.toggle("hidden", rows.length > 0);
   noteRows.innerHTML = rows
     .map(
       (note) => `
         <tr class="note-row">
+          <td class="select-cell">
+            <input class="row-select" type="checkbox" data-select="${escapeHtml(note.id)}" ${selectedIds.has(note.id) ? "checked" : ""} />
+          </td>
           <td class="cover-cell">${
             note.coverDataUrl || note.coverUrl
               ? `<img src="${escapeHtml(note.coverDataUrl || note.coverUrl)}" alt="${escapeHtml(note.title)}" referrerpolicy="no-referrer" loading="lazy" />`
@@ -150,6 +204,7 @@ function renderRows() {
           <td>${dateLabel(note.capturedAt)}</td>
           <td class="action-cell">
             <button class="text-button detail-button" data-detail="${escapeHtml(note.id)}">详情</button>
+            <button class="text-button" data-edit="${escapeHtml(note.id)}">编辑</button>
             <button class="text-button" data-delete="${escapeHtml(note.id)}">删除</button>
           </td>
         </tr>
@@ -164,6 +219,14 @@ function renderRows() {
       }));
     });
   });
+  updateSelectionUi(rows);
+}
+
+function updateSelectionUi(rows = filteredNotes()) {
+  selectionCount.textContent = `已选择 ${selectedIds.size} 条`;
+  selectAllRowsInput.checked = rows.length > 0 && rows.every((note) => selectedIds.has(note.id));
+  selectAllRowsInput.indeterminate =
+    rows.some((note) => selectedIds.has(note.id)) && !selectAllRowsInput.checked;
 }
 
 function renderDetailSection(title, content) {
@@ -213,9 +276,29 @@ function openDetail(note) {
   detailDialog.showModal();
 }
 
+function splitList(value) {
+  return String(value || "")
+    .split(/[,，\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function openEdit(note) {
+  editingNoteId = note.id;
+  editCategoryInput.value = note.category || categories[0];
+  editTitleInput.value = note.title || "";
+  editKeywordsInput.value = (note.keywords || []).join("，");
+  editCoverTakeawaysInput.value = (note.coverTakeaways || []).join("\n");
+  editContentTakeawaysInput.value = (note.contentTakeaways || []).join("\n");
+  editTopicIdeasInput.value = (note.topicIdeas || []).join("\n");
+  editNotesInput.value = note.notes || "";
+  editDialog.showModal();
+}
+
 async function load() {
   categories = await window.topicStore.getCategories();
   notes = await window.topicStore.getNotes();
+  promptTemplates = await window.topicStore.getPromptTemplates();
   const settings = await window.topicStore.getAiSettings();
   const updateSettings = await window.topicStore.getUpdateSettings();
   apiKeyInput.value = settings.apiKey;
@@ -363,6 +446,8 @@ function exportCsv() {
 
 categoryFilter.addEventListener("change", renderRows);
 searchInput.addEventListener("input", renderRows);
+coverFilter.addEventListener("change", renderRows);
+aiFilter.addEventListener("change", renderRows);
 exportButton.addEventListener("click", exportCsv);
 
 summary.addEventListener("click", (event) => {
@@ -373,10 +458,25 @@ summary.addEventListener("click", (event) => {
 });
 
 noteRows.addEventListener("click", async (event) => {
+  const selectInput = event.target.closest("[data-select]");
+  if (selectInput) {
+    if (selectInput.checked) selectedIds.add(selectInput.dataset.select);
+    else selectedIds.delete(selectInput.dataset.select);
+    updateSelectionUi();
+    return;
+  }
+
   const detailButton = event.target.closest("[data-detail]");
   if (detailButton) {
     const note = notes.find((item) => item.id === detailButton.dataset.detail);
     if (note) openDetail(note);
+    return;
+  }
+
+  const editButton = event.target.closest("[data-edit]");
+  if (editButton) {
+    const note = notes.find((item) => item.id === editButton.dataset.edit);
+    if (note) openEdit(note);
     return;
   }
 
@@ -390,6 +490,26 @@ closeDetailButton.addEventListener("click", () => detailDialog.close());
 detailDialog.addEventListener("click", (event) => {
   if (event.target === detailDialog) detailDialog.close();
 });
+
+closeEditButton.addEventListener("click", () => editDialog.close());
+editForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!editingNoteId) return;
+  await window.topicStore.updateNote(editingNoteId, {
+    category: editCategoryInput.value,
+    title: editTitleInput.value.trim(),
+    keywords: splitList(editKeywordsInput.value),
+    coverTakeaways: splitList(editCoverTakeawaysInput.value),
+    contentTakeaways: splitList(editContentTakeawaysInput.value),
+    topicIdeas: splitList(editTopicIdeasInput.value),
+    notes: editNotesInput.value.trim(),
+    updatedAt: new Date().toISOString()
+  });
+  editDialog.close();
+  await load();
+});
+
+closeBatchButton.addEventListener("click", () => batchDialog.close());
 
 addCategoryButton.addEventListener("click", async () => {
   const value = newCategoryInput.value.trim();
@@ -410,9 +530,91 @@ saveAiSettingsButton.addEventListener("click", async () => {
   aiSettingsState.textContent = settings.apiKey ? "已保存" : "未设置";
 });
 
+promptTemplateSelect.addEventListener("change", () => {
+  const template = promptTemplates.find((item) => item.id === promptTemplateSelect.value);
+  if (template) customPromptInput.value = template.prompt;
+});
+
 resetPromptButton.addEventListener("click", () => {
   customPromptInput.value = window.topicStore.DEFAULT_CUSTOM_PROMPT;
   aiSettingsState.textContent = "已恢复默认 Prompt，记得保存";
+});
+
+selectAllRowsInput.addEventListener("change", () => {
+  const rows = filteredNotes();
+  if (selectAllRowsInput.checked) {
+    rows.forEach((note) => selectedIds.add(note.id));
+  } else {
+    rows.forEach((note) => selectedIds.delete(note.id));
+  }
+  renderRows();
+});
+
+bulkMoveButton.addEventListener("click", async () => {
+  if (!selectedIds.size) return alert("请先选择记录。");
+  await window.topicStore.updateNotes([...selectedIds], { category: bulkCategory.value });
+  selectedIds.clear();
+  await load();
+});
+
+bulkDeleteButton.addEventListener("click", async () => {
+  if (!selectedIds.size) return alert("请先选择记录。");
+  if (!confirm(`确定删除选中的 ${selectedIds.size} 条记录吗？`)) return;
+  await window.topicStore.deleteNotes([...selectedIds]);
+  selectedIds.clear();
+  await load();
+});
+
+function renderBatchResult(result) {
+  batchBody.innerHTML = `
+    ${renderDetailSection("一句话总结", `<p>${escapeHtml(result.summary || "")}</p>`)}
+    ${renderDetailSection("高频关键词", `<div class="detail-tags">${renderTags(result.commonKeywords || [], 40)}</div>`)}
+    ${renderDetailSection("封面套路", renderFullList(result.coverPatterns || []))}
+    ${renderDetailSection("标题公式", renderFullList(result.titleFormulas || []))}
+    ${renderDetailSection("内容共性", renderFullList(result.contentPatterns || []))}
+    ${renderDetailSection("下一步选题", renderFullList(result.nextTopics || []))}
+  `;
+  batchDialog.showModal();
+}
+
+bulkAnalyzeButton.addEventListener("click", async () => {
+  const selected = notes.filter((note) => selectedIds.has(note.id));
+  if (selected.length < 2) return alert("请至少选择 2 条记录做批量总结。");
+  batchBody.innerHTML = "<p class=\"muted-text\">AI 正在总结选中记录...</p>";
+  batchDialog.showModal();
+  try {
+    const settings = await window.topicStore.getAiSettings();
+    renderBatchResult(await window.topicAi.summarizeNotesWithAi({ notes: selected, settings }));
+  } catch (error) {
+    batchBody.innerHTML = `<p class="muted-text">${escapeHtml(error.message || "批量总结失败。")}</p>`;
+  }
+});
+
+exportJsonButton.addEventListener("click", async () => {
+  const backup = await window.topicStore.exportBackup();
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `小红书选题库备份-${new Date().toISOString().slice(0, 10)}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+});
+
+importJsonButton.addEventListener("click", () => importJsonFile.click());
+importJsonFile.addEventListener("change", async () => {
+  const file = importJsonFile.files?.[0];
+  if (!file) return;
+  try {
+    const backup = JSON.parse(await file.text());
+    await window.topicStore.importBackup(backup);
+    selectedIds.clear();
+    await load();
+  } catch (error) {
+    alert(error.message || "导入失败。");
+  } finally {
+    importJsonFile.value = "";
+  }
 });
 
 saveUpdateSettingsButton.addEventListener("click", async () => {

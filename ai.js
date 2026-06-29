@@ -112,6 +112,54 @@ async function analyzeNoteWithAi({ extraction, categories, settings }) {
   };
 }
 
+async function summarizeNotesWithAi({ notes, settings }) {
+  if (!settings.apiKey) {
+    throw new Error("请先在表格库里保存 DeepSeek API Key。");
+  }
+  const compactNotes = notes.slice(0, 30).map((note) => ({
+    title: note.title,
+    category: note.category,
+    keywords: note.keywords,
+    coverTakeaways: note.coverTakeaways,
+    contentTakeaways: note.contentTakeaways,
+    topicIdeas: note.topicIdeas,
+    notes: note.notes
+  }));
+
+  const response = await fetch("https://api.deepseek.com/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${settings.apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: settings.model || globalThis.topicStore.DEFAULT_AI_SETTINGS.model,
+      messages: [
+        {
+          role: "system",
+          content:
+            "你是小红书选题资料库分析助手。请基于多条已采集笔记，总结共性、标题公式、封面套路和下一步选题。输出合法 JSON。"
+        },
+        {
+          role: "user",
+          content: `请分析这些笔记：\n${JSON.stringify(compactNotes, null, 2)}\n\n输出 JSON：{\n  "commonKeywords": ["高频关键词"],\n  "coverPatterns": ["封面共性"],\n  "titleFormulas": ["标题公式"],\n  "contentPatterns": ["内容共性"],\n  "nextTopics": ["可继续创作的选题"],\n  "summary": "一句话总结"\n}`
+        }
+      ],
+      response_format: { type: "json_object" },
+      thinking: { type: "disabled" },
+      max_tokens: Math.max(settings.maxTokens || 1600, 1800)
+    })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error?.message || `DeepSeek 请求失败：${response.status}`);
+  }
+  const text = payload.choices?.[0]?.message?.content || outputText(payload);
+  if (!text) throw new Error("AI 没有返回可解析的批量总结。");
+  return JSON.parse(text);
+}
+
 globalThis.topicAi = {
-  analyzeNoteWithAi
+  analyzeNoteWithAi,
+  summarizeNotesWithAi
 };

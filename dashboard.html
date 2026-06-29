@@ -29,6 +29,22 @@
           <input id="search" type="search" placeholder="标题 / 关键词 / 备注" />
         </label>
         <label>
+          封面
+          <select id="coverFilter">
+            <option value="全部">全部</option>
+            <option value="有封面">有封面</option>
+            <option value="无封面">无封面</option>
+          </select>
+        </label>
+        <label>
+          AI
+          <select id="aiFilter">
+            <option value="全部">全部</option>
+            <option value="已分析">已分析</option>
+            <option value="未分析">未分析</option>
+          </select>
+        </label>
+        <label>
           新增栏目
           <div class="inline-control">
             <input id="newCategory" type="text" placeholder="如：人物速写" />
@@ -50,6 +66,10 @@
           <label>
             模型
             <input id="modelName" type="text" />
+          </label>
+          <label>
+            Prompt 模板
+            <select id="promptTemplate"></select>
           </label>
           <label>
             输出长度
@@ -104,10 +124,26 @@
 
       <section class="summary-grid" id="summary"></section>
 
+      <section class="bulk-bar">
+        <label class="check-row">
+          <input id="selectAllRows" type="checkbox" />
+          选择当前列表
+        </label>
+        <span id="selectionCount" class="settings-note">已选择 0 条</span>
+        <select id="bulkCategory"></select>
+        <button id="bulkMove" type="button" class="secondary">批量改栏目</button>
+        <button id="bulkAnalyze" type="button" class="secondary">批量 AI 总结</button>
+        <button id="bulkDelete" type="button" class="danger">批量删除</button>
+        <button id="exportJson" type="button" class="secondary">导出 JSON</button>
+        <button id="importJson" type="button" class="secondary">导入 JSON</button>
+        <input id="importJsonFile" class="hidden" type="file" accept="application/json,.json" />
+      </section>
+
       <section class="table-wrap">
         <table>
           <thead>
             <tr>
+              <th>选择</th>
               <th>封面</th>
               <th>栏目</th>
               <th>标题</th>
@@ -137,9 +173,47 @@
           <div class="detail-body" id="detailBody"></div>
         </div>
       </dialog>
+
+      <dialog id="editDialog" class="detail-dialog">
+        <form id="editForm" class="detail-shell">
+          <header class="detail-header">
+            <div>
+              <p class="eyebrow">编辑记录</p>
+              <h2 id="editDialogTitle">修改采集内容</h2>
+            </div>
+            <button id="closeEdit" class="secondary" type="button">关闭</button>
+          </header>
+          <div class="detail-body edit-grid">
+            <label>栏目<select id="editCategory"></select></label>
+            <label class="wide-field">标题<textarea id="editTitle" rows="2"></textarea></label>
+            <label class="wide-field">关键词<input id="editKeywords" type="text" /></label>
+            <label class="wide-field">封面共性<textarea id="editCoverTakeaways" rows="4"></textarea></label>
+            <label class="wide-field">内容共性<textarea id="editContentTakeaways" rows="4"></textarea></label>
+            <label class="wide-field">选题内容<textarea id="editTopicIdeas" rows="5"></textarea></label>
+            <label class="wide-field">备注<textarea id="editNotes" rows="4"></textarea></label>
+            <div class="settings-actions">
+              <button type="submit">保存修改</button>
+            </div>
+          </div>
+        </form>
+      </dialog>
+
+      <dialog id="batchDialog" class="detail-dialog">
+        <div class="detail-shell">
+          <header class="detail-header">
+            <div>
+              <p class="eyebrow">批量 AI 总结</p>
+              <h2>选中笔记共性</h2>
+            </div>
+            <button id="closeBatch" class="secondary" type="button">关闭</button>
+          </header>
+          <div class="detail-body" id="batchBody"></div>
+        </div>
+      </dialog>
     </main>
 
     <script src="storage.js"></script>
+    <script src="ai.js"></script>
     <script src="dashboard.js"></script>
   </body>
 </html>

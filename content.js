@@ -35,10 +35,11 @@ function backgroundImageUrl(el) {
   return match ? match[1] : "";
 }
 
-function firstImage() {
-  const ogImage = normalizeUrl(getMeta("og:image"));
-  if (ogImage) return ogImage;
+function isGenericImage(url) {
+  return /sns-avatar|avatar|favicon|logo|xhslink|小红书|redbook|icon/i.test(url || "");
+}
 
+function firstImage() {
   const images = Array.from(document.images)
     .map((img) => ({
       src: normalizeUrl(
@@ -51,10 +52,13 @@ function firstImage() {
       width: img.naturalWidth || img.width,
       height: img.naturalHeight || img.height
     }))
-    .filter((img) => img.src && img.width >= 180 && img.height >= 180)
+    .filter((img) => img.src && !isGenericImage(img.src) && img.width >= 180 && img.height >= 180)
     .sort((a, b) => b.width * b.height - a.width * a.height);
 
   if (images[0]?.src) return images[0].src;
+
+  const ogImage = normalizeUrl(getMeta("og:image"));
+  if (ogImage && !isGenericImage(ogImage)) return ogImage;
 
   const backgroundCandidates = Array.from(document.querySelectorAll("[style], .swiper-slide, .note-slider, .media-container"))
     .map((el) => normalizeUrl(backgroundImageUrl(el)))
