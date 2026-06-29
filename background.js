@@ -196,10 +196,12 @@ chrome.runtime.onInstalled.addListener(() => {
       documentUrlPatterns: ["https://www.xiaohongshu.com/*"]
     });
   });
+  chrome.sidePanel?.setPanelBehavior({ openPanelOnActionClick: true });
   configureUpdateAlarm();
 });
 
 chrome.runtime.onStartup.addListener(() => {
+  chrome.sidePanel?.setPanelBehavior({ openPanelOnActionClick: true });
   configureUpdateAlarm();
   checkForUpdates().catch(() => {});
 });
